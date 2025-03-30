@@ -58,26 +58,6 @@ prior written consent of DigiPen Institute of Technology is prohibited.
 #include <thread> //to create a separate thread for file downloader.
 #include <fstream>
 
-/*
-	Contains data required to manage reliable data transfer to and from clients.
-*/
-struct Reliable_Transfer
-{
-	/*
-		Reliable Send
-	*/
-	//Represents the current packet to send/resend. 
-	int current_sequence_number{ 0 };
-	//Timeout, when timer completes then packet is to be resent. Set to max since no packet sent yet.
-	double time_last_packet_sent{ 20000000000000 };
-	//Controls if the packet should be sent. Set to true to send packet immediately.
-	bool toSend{ true }; 
-	/*
-		Reliable Recv
-	*/
-	//Represents the last packet successfully received.
-	int ack_last_packet_received{ -1 };
-};
 
 /*
 	Represents a player session, where communications with the player is controlled through this.
@@ -89,6 +69,10 @@ struct Reliable_Transfer
 struct Player_Session
 {
 public:
+	Player_Session(sockaddr_storage addr)
+		: addrDest{addr}
+	{
+	}
 	//Used to control reliable data transfer.
 	Reliable_Transfer reliable_transfer{};
 	//Used to determine if a player should be forcibly disconnected, like after X seconds of no response.
@@ -111,15 +95,6 @@ public:
 	std::string send_buffer{};
 };
 
-/*
-	Defines used for the server program.
-*/
-//Max size of udp packet
-constexpr int MAX_PACKET_SIZE = 1000;
-//Max buffer size when receiving.
-constexpr int BUFFER_SIZE = 2000;
-//Time before packet should be resent again, if no correct ACK is received.
-constexpr float TIMEOUT_TIMER = 0.5f;
 //Time before server stops waiting for player response, and disconnects them.
 constexpr float AUTOMATIC_DISCONNECTION_TIMER = 4.f;
 
@@ -137,50 +112,158 @@ int player_id = 0;
 //For any sending/receiving, set at the start.
 SOCKET udp_socket{};
 
-///*
-//	\brief
-//	Write to UDP file socket
-//	Only called by File_Download_Interaction, which is a single threaded function.
-//	Basically hardcoded for the UDP socket used for file downloading.
-//	\return
-//	Bytes written to socket.
-//	-1 on SOCKET_ERROR, 0 if other port has been gracefully closed, -2 if unable to write ip/port to socketaddr struct.
-//*/
-//int WriteToDownloadSocket(sockaddr_storage& addrDest, char* data, size_t num_bytes)
-//{
-//	size_t offset{};
-//	while (true)
-//	{
-//		//All data sent.
-//		if (offset >= num_bytes) break;
-//		int num_bytes_sent = sendto(udp_socket, data + offset, static_cast<int>(num_bytes - offset), 0, (sockaddr*)&addrDest, sizeof(addrDest));
-//		//Operation could be blocking, check to see what is the error.
-//		if (num_bytes_sent == SOCKET_ERROR)
-//		{
-//			size_t errorCode = WSAGetLastError();
-//			//Blocking, just sleep and continue.
-//			if (errorCode == WSAEWOULDBLOCK)
-//			{
-//				continue;
-//			}
-//			//Gracefully closed
-//			else if (errorCode == WSAESHUTDOWN)
-//			{
-//				return 0;
-//			}
-//			//Not because of blocking, something actually went wrong.
-//			return SOCKET_ERROR;
-//		}
-//		//Gracefully closed
-//		if (num_bytes_sent == 0)
-//		{
-//			return 0;
-//		}
-//		offset += num_bytes_sent;
-//	}
-//
-//	return (int)num_bytes;
-//}
+//Forward declarations:
+void HandleStartGame();
+
+
+/*
+	\brief
+	The starting point where server-player interactions are managed.
+	Called in main after udp_socket has been created and binded.
+	Return (without closing udp_socket) when server-player interactions are completed.
+*/
+void GameProgram()
+{
+	//Wait for players to join.
+	HandleStartGame();
+	while (true)
+	{
+		/*
+			Structure of Program:
+			It first receives the message, and checks which client sent it (session ID).
+			It then waits for other clients, then after all clients are done it checks for a few things.
+			It stops waiting after a few seconds, and clients who haven’t responded back means they disconnected, so remove them from client list and don’t wait for them.
+			Check who collided with asteroid first, based on their sent timestamps.
+			Send message back to clients
+			- New player transforms (from other players).
+			- New bullet creations (from other players)
+			- Asteroid creations.
+			- Asteroid destruction (who destroyed what).
+		*/
+		//==Ensure all messages received and ACK'd.
+		ReceiveAllMessages();
+		
+	}
+}
+
+/*
+	\brief
+	Continually get join requests from players, adding them as new players to the map.
+	This happens until the START command is given, which is then echoed to all players and then the game starts (the function returns).
+*/
+void HandleStartGame()
+{
+	char temp_buffer[MAX_BUFFER_SIZE]{};
+	while (true)
+	{
+		memset(temp_buffer, 0, MAX_BUFFER_SIZE);
+		//==Read any incoming message.
+		sockaddr_storage sender_addr{}; //temporarily store sender's address.
+		int size_sockaddr = sizeof(sender_addr);
+		int bytes_read = recvfrom(udp_socket, temp_buffer, MAX_BUFFER_SIZE, 0, (sockaddr*)&sender_addr, &size_sockaddr);
+		
+		//Join request or Start request detected.
+		//Both only has 1 byte.
+		if (bytes_read == 1)
+		{
+			char command_ID = temp_buffer[0];
+			//Player wants to join.
+			if (command_ID == JOIN_REQUEST)
+			{
+				int client_player_id = -1; //-1 to indicate it doesn't have a player id yet.
+				//Iterate over the map, to see if the player already is in the game (maybe they never received the JOIN_RESPONSE).
+				for (auto& player_entry : player_Session_Map)
+				{
+					//Check if they're already in the map.
+					if (!Compare_SockAddr(&sender_addr, &player_entry.second.addrDest)) continue;
+					//They are already in the map.
+					client_player_id = player_entry.first;
+				}
+
+				//No player entry found for this ip address, so add in a new entry.
+				if (client_player_id == -1)
+				{
+					client_player_id = player_id;
+					/*
+						Store new player information into the map.
+					*/
+					player_Session_Map.emplace(player_id++, Player_Session{ sender_addr });
+				}
+
+				//Send the information back to the player as a JOIN_RESPONSE, [Checksum, 2][0x21][Player_ID, 2].
+				uint16_t network_player_id = htons((uint16_t)client_player_id);
+				char buffer[10]{};
+				buffer[2] = JOIN_RESPONSE;
+				memcpy_s(buffer+3, 2, &network_player_id, 2);
+				uint16_t checksum = CalculateChecksum(3, buffer + 2);
+				checksum = htons(checksum);
+				memcpy_s(buffer, 2, &checksum, 2);
+
+				WriteToSocket(udp_socket, sender_addr, buffer, 5);
+			}
+		}
+
+		/*
+			TODO: Handle start request, ensuring that all players receive start command via ACK.
+		*/
+
+	}
+}
+
+/*
+	\brief
+	Called by GameProgram() to ensure all messages are received (and ACK'd) from players.
+	- If player hasn't responded for some time, they are removed from the map and the server no longer waits for them.
+	- If a new player requests to join, they are assigned a new ID.
+
+	Follows reliable data transfer protocols.
+*/
+void ReceiveAllMessages()
+{
+	char temp_buffer[MAX_BUFFER_SIZE]{};
+	while (true)
+	{
+		/*
+			TODO: Automatic/Manual Disconnection and Reconnection not being considered yet.
+		*/
+		memset(temp_buffer, 0, MAX_BUFFER_SIZE);
+		//==Read any incoming message.
+		sockaddr_storage sender_addr{}; //temporarily store sender's address.
+		int size_sockaddr = sizeof(sender_addr);
+		int bytes_read = recvfrom(udp_socket, temp_buffer, MAX_BUFFER_SIZE, 0, (sockaddr*)&sender_addr, &size_sockaddr);
+		
+		//Minimum message size is 6 bytes (disregarding the join and start commands at the start of the game) to account for checksum and sequence number.
+		if (bytes_read >= 6)
+		{
+			/*
+				First ensure that the checksum is ok, and sequence number is not a duplicate packet.
+			*/
+
+		}
+
+
+		/*
+			Iterate over the entire player map
+			- If all player messages received successfully, return.
+			- TODO: Check if a player has not responded in AUTOMATIC_DISCONNECTION_TIMER seconds, and set to inactive if so (i.e. no need to wait).
+		*/
+		bool isAllMessageReceived{ true };
+		for (auto& player_session_pair : player_Session_Map)
+		{
+			Player_Session& player_session = player_session_pair.second;
+			if (player_session.recv_data_to_recv == -1 ||  //No data received yet.
+				player_session.recv_buffer.size() != player_session.recv_data_to_recv) //Not enough data received yet.
+			{
+				isAllMessageReceived = false;
+				break;
+			}
+		}
+		
+		//Passed lockstep 
+		if(isAllMessageReceived)
+		
+	}
+}
 
 
 /*
@@ -288,10 +371,8 @@ int main(int argc, char* argv[])
 
 	
 
-	while (true)
-	{
-		std::cout << "Hello!\n";
-	}
+	//Will run until game program closes (server-player interaction stops).
+	GameProgram();
 	
 
 	// -------------------------------------------------------------------------
@@ -304,23 +385,6 @@ int main(int argc, char* argv[])
 	WSACleanup();
 }
 
-/*
-	\brief
-	Convert the ip address string to bytes.
-*/
-std::array<unsigned char, 4> GetIPAddressBytes(std::string ip_addr)
-{
-	std::array<unsigned char, 4> byte_arr{};
-	char delimiter{}; int byte{};
-	std::istringstream ip_addr_stream{ ip_addr };
-	ip_addr_stream >> std::ws;
-	for (int i = 0; i < 4; i++)
-	{
-		ip_addr_stream >> byte >> delimiter;
-		byte_arr[i] = static_cast<unsigned char>(byte);
-	}
-	return byte_arr;
-}
 
 
 
