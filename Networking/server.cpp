@@ -135,7 +135,7 @@ int server_tcp_port_number{}, server_udp_port_number{};
 int player_id = 0;
 
 //For any sending/receiving, set at the start.
-SOCKET file_download_socket{};
+SOCKET udp_socket{};
 
 ///*
 //	\brief
@@ -153,7 +153,7 @@ SOCKET file_download_socket{};
 //	{
 //		//All data sent.
 //		if (offset >= num_bytes) break;
-//		int num_bytes_sent = sendto(file_download_socket, data + offset, static_cast<int>(num_bytes - offset), 0, (sockaddr*)&addrDest, sizeof(addrDest));
+//		int num_bytes_sent = sendto(udp_socket, data + offset, static_cast<int>(num_bytes - offset), 0, (sockaddr*)&addrDest, sizeof(addrDest));
 //		//Operation could be blocking, check to see what is the error.
 //		if (num_bytes_sent == SOCKET_ERROR)
 //		{
@@ -202,6 +202,13 @@ int main(int argc, char* argv[])
 	}
 	server_udp_port_number = std::stoi(udp_port_string);
 
+	/*
+		1. Create a UDP socket with port number based on client input
+		2. Bind the UDP socket to the machine
+		3. Call another function (which will run things in a while loop).
+		- This function handles all server-client interactions.
+		4. Close and release all resources properly after the function returns.
+	*/
 
 	// -------------------------------------------------------------------------
 	// Start up Winsock, asking for version 2.2.
@@ -234,12 +241,11 @@ int main(int argc, char* argv[])
 	/*
 		Creation of UDP socket.
 	*/
-
-	file_download_socket = socket(
+	udp_socket = socket(
 		AF_INET, //IPV4
 		SOCK_DGRAM, //UDP.
 		IPPROTO_UDP);
-	if (file_download_socket == INVALID_SOCKET)
+	if (udp_socket == INVALID_SOCKET)
 	{
 		std::cerr << "socket() failed." << std::endl;
 		WSACleanup();
@@ -269,169 +275,34 @@ int main(int argc, char* argv[])
 	/*
 		Binding of UDP socket to current ip address
 	*/
-	if (bind(file_download_socket, info_udp->ai_addr, static_cast<int>(info_udp->ai_addrlen)) != NO_ERROR) {
+	if (bind(udp_socket, info_udp->ai_addr, static_cast<int>(info_udp->ai_addrlen)) != NO_ERROR) {
 		std::cerr << "Bind failed" << std::endl;
-		closesocket(file_download_socket);
-		file_download_socket = INVALID_SOCKET;
+		closesocket(udp_socket);
+		udp_socket = INVALID_SOCKET;
 		WSACleanup();
 		return errorCode;
 	}
 	// Enable non-blocking I/O on the download socket.
 	u_long enable = 1;
-	ioctlsocket(file_download_socket, FIONBIO, &enable);
+	ioctlsocket(udp_socket, FIONBIO, &enable);
 
-	std::thread file_download_thread(File_Download_Interaction);
-	//JOELEND
+	
 
-	// -------------------------------------------------------------------------
-	// Resolve own host name into IP addresses (in a singly-linked list).
-	//
-	// getaddrinfo()
-	// -------------------------------------------------------------------------
-
-	// Object hints indicates which protocols to use to fill in the info.
-
-	addrinfo hints{};
-	SecureZeroMemory(&hints, sizeof(hints));
-	hints.ai_family = AF_INET;			// IPv4
-	// For UDP use SOCK_DGRAM instead of SOCK_STREAM.
-	hints.ai_socktype = SOCK_STREAM;	// Reliable delivery
-	// Could be 0 for autodetect, but reliable delivery over IPv4 is always TCP.
-	hints.ai_protocol = IPPROTO_TCP;	// TCP
-	// Create a passive socket that is suitable for bind() and listen().
-	hints.ai_flags = AI_PASSIVE;
-
-
-
-	addrinfo* info = nullptr;
-	errorCode = getaddrinfo(host, portString.c_str(), &hints, &info);
-	if ((NO_ERROR != errorCode) || (nullptr == info))
+	while (true)
 	{
-		std::cerr << "getaddrinfo() failed." << std::endl;
-		WSACleanup();
-		return errorCode;
+		std::cout << "Hello!\n";
 	}
-
-	/* PRINT SERVER IP ADDRESS AND PORT NUMBER */
-	char serverIPAddr[1000];
-	struct sockaddr_in* serverAddress = reinterpret_cast<struct sockaddr_in*> (info->ai_addr);
-	inet_ntop(AF_INET, &(serverAddress->sin_addr), serverIPAddr, INET_ADDRSTRLEN);
-	getnameinfo(info->ai_addr, static_cast <socklen_t> (info->ai_addrlen), serverIPAddr, sizeof(serverIPAddr), nullptr, 0, NI_NUMERICHOST);
-	std::cerr << std::endl;
-	std::cerr << "Server IP Address: " << serverIPAddr << std::endl;
-	std::cerr << "Server TCP Port Number: " << portString << std::endl;
-	std::cerr << "Server UDP Port Number: " << udp_port_string << std::endl;
-
-	server_ip_addr = GetIPAddressBytes(serverIPAddr);
-
-	/*
-		Creation and binding of tcp socket.
-	*/
-
-	SOCKET listenerSocket = socket(
-		hints.ai_family,
-		hints.ai_socktype,
-		hints.ai_protocol);
-	if (listenerSocket == INVALID_SOCKET)
-	{
-		std::cerr << "socket() failed." << std::endl;
-		freeaddrinfo(info);
-		WSACleanup();
-		return 1;
-	}
-
-	errorCode = bind(
-		listenerSocket,
-		info->ai_addr,
-		static_cast<int>(info->ai_addrlen));
-	if (errorCode != NO_ERROR)
-	{
-		std::cerr << "bind() failed." << std::endl;
-		closesocket(listenerSocket);
-		listenerSocket = INVALID_SOCKET;
-	}
-
-	freeaddrinfo(info);
-
-	if (listenerSocket == INVALID_SOCKET)
-	{
-		std::cerr << "bind() failed." << std::endl;
-		WSACleanup();
-		return 2;
-	}
-
-
-	// -------------------------------------------------------------------------
-	// Set a socket in a listening mode and accept 1 incoming client.
-	//
-	// listen()
-	// accept()
-	// -------------------------------------------------------------------------
-
-	errorCode = listen(listenerSocket, SOMAXCONN);
-	if (errorCode != NO_ERROR)
-	{
-		std::cerr << "listen() failed." << std::endl;
-		closesocket(listenerSocket);
-		WSACleanup();
-		return 3;
-	}
-
-	{
-		const auto onDisconnect = [&]() { disconnect(listenerSocket); };
-		auto tq = TaskQueue<SOCKET, decltype(execute), decltype(onDisconnect)>{ 10, 20, execute, onDisconnect };
-		while (listenerSocket != INVALID_SOCKET)
-		{
-			sockaddr clientAddress{};
-			SecureZeroMemory(&clientAddress, sizeof(clientAddress));
-			int clientAddressSize = sizeof(clientAddress);
-			SOCKET clientSocket = accept(
-				listenerSocket,
-				&clientAddress,
-				&clientAddressSize);
-			if (clientSocket == INVALID_SOCKET)
-			{
-				break;
-			}
-			/* PRINT CLIENT IP ADDRESS AND PORT NUMBER */
-			char clientIPAddr[1000];
-			char clientPort[1000];
-			getpeername(clientSocket, &clientAddress, &clientAddressSize);
-			getnameinfo(&clientAddress, clientAddressSize, clientIPAddr, sizeof(clientIPAddr), clientPort, sizeof(clientPort), NI_NUMERICHOST);
-			std::cerr << std::endl;
-			std::cerr << "Client IP Address: " << clientIPAddr << std::endl;
-			std::cerr << "Client Port Number: " << clientPort << std::endl;
-			AddSocketToList(clientSocket, clientIPAddr, clientPort);
-			tq.produce(clientSocket);
-		}
-	}
+	
 
 	// -------------------------------------------------------------------------
 	// Clean-up after Winsock.
 	//
 	// WSACleanup()
 	// -------------------------------------------------------------------------
-	isProgramDone = true; //So that the thread can be joined.
-	if (file_download_thread.joinable()) file_download_thread.join();
-	closesocket(file_download_socket);
-	file_download_socket = INVALID_SOCKET;
+	closesocket(udp_socket); //Shutdown not necessary.
+	udp_socket = INVALID_SOCKET;
 	WSACleanup();
 }
-
-/*
-	\brief
-	Called upon termination of program, to close the server socket.
-*/
-void disconnect(SOCKET& listenerSocket)
-{
-	if (listenerSocket != INVALID_SOCKET)
-	{
-		shutdown(listenerSocket, SD_BOTH);
-		closesocket(listenerSocket);
-		listenerSocket = INVALID_SOCKET;
-	}
-}
-
 
 /*
 	\brief

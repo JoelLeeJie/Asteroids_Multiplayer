@@ -137,6 +137,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\Checksum.cpp" />
+    <ClCompile Include="..\client.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\server-OLD.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\server.cpp" />
     <ClCompile Include="Utility.cpp" />
   </ItemGroup>
