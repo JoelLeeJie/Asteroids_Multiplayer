@@ -91,8 +91,21 @@ public:
 	//Stores messages received from player, cleared at the end of each frame.
 	std::string recv_buffer{};
 
+	//In the case where data to send is bigger than maximum allowable packet size, it sends only a portion of the buffer and indicates how much it sent.
+	//This means the send buffer will only be cleared of (bytes_sent) amount of bytes when ack'd, and not erase unsent messages.
+	int bytes_sent{};
 	//Stores messages to send to player, cleared at the end of each frame.
 	std::string send_buffer{};
+};
+
+/*
+	Represents a packet received from socket, used so they can be added to a queue.
+*/
+struct Packet
+{
+	sockaddr_storage senderAddr{};
+	std::string data{};
+	int seq_or_ack_number{}; //Either sequence number or ACK.
 };
 
 //Time before server stops waiting for player response, and disconnects them.
@@ -111,6 +124,14 @@ int player_id = 0;
 
 //For any sending/receiving, set at the start.
 SOCKET udp_socket{};
+std::mutex socket_lock{};
+
+//For temporarily storing packets received.
+std::queue<Packet> packet_recv_queue{};
+std::mutex packet_queue_lock{};
+
+//Indicates if the game has ended, so0 the multi-threaded functions can end too.
+bool isGameRunning{ true };
 
 //Forward declarations:
 void HandleStartGame();
@@ -141,7 +162,7 @@ void GameProgram()
 			- Asteroid destruction (who destroyed what).
 		*/
 		//==Ensure all messages received and ACK'd.
-		ReceiveAllMessages();
+		//ReceiveAllMessages();
 		
 	}
 }
@@ -160,7 +181,13 @@ void HandleStartGame()
 		//==Read any incoming message.
 		sockaddr_storage sender_addr{}; //temporarily store sender's address.
 		int size_sockaddr = sizeof(sender_addr);
-		int bytes_read = recvfrom(udp_socket, temp_buffer, MAX_BUFFER_SIZE, 0, (sockaddr*)&sender_addr, &size_sockaddr);
+		int bytes_read{};
+		
+		{
+			std::lock_guard<std::mutex> socket_locker{socket_lock};
+			bytes_read = recvfrom(udp_socket, temp_buffer, MAX_BUFFER_SIZE, 0, (sockaddr*)&sender_addr, &size_sockaddr);
+		}
+		 
 		
 		//Join request or Start request detected.
 		//Both only has 1 byte.
@@ -198,7 +225,7 @@ void HandleStartGame()
 				uint16_t checksum = CalculateChecksum(3, buffer + 2);
 				checksum = htons(checksum);
 				memcpy_s(buffer, 2, &checksum, 2);
-
+				std::lock_guard<std::mutex> socket_locker{socket_lock};
 				WriteToSocket(udp_socket, sender_addr, buffer, 5);
 			}
 		}
@@ -230,8 +257,12 @@ void ReceiveAllMessages()
 		//==Read any incoming message.
 		sockaddr_storage sender_addr{}; //temporarily store sender's address.
 		int size_sockaddr = sizeof(sender_addr);
-		int bytes_read = recvfrom(udp_socket, temp_buffer, MAX_BUFFER_SIZE, 0, (sockaddr*)&sender_addr, &size_sockaddr);
-		
+		int bytes_read{};
+
+		{
+			std::lock_guard<std::mutex> socket_locker{socket_lock};
+			bytes_read = recvfrom(udp_socket, temp_buffer, MAX_BUFFER_SIZE, 0, (sockaddr*)&sender_addr, &size_sockaddr);
+		}
 		//Minimum message size is 6 bytes (disregarding the join and start commands at the start of the game) to account for checksum and sequence number.
 		if (bytes_read >= 6)
 		{
@@ -260,11 +291,138 @@ void ReceiveAllMessages()
 		}
 		
 		//Passed lockstep 
-		if(isAllMessageReceived)
+		//if (isAllMessageReceived);
 		
 	}
 }
 
+
+
+/*
+		It should be called in a separate thread.
+		Will continually read messages from the udp socket, adding them to the packet queue for another function to handle.
+		Will write messages to socket as needed (for messages that require ACK) based on toSend and timeout.
+
+		Note:
+		- Only messages that require an ACK should be sent in this method. Otherwise, just write as per normal (note need to use mutex lock)
+		- To Send: Set the send buffer to the message (excluding checksum and sequence number). Set toSend to be true.
+		- Packet data in the queue has their checksum and sequence number stripped away. They are all confirmed to be uncorrupted,
+		and the number is a separate variable from the data.
+		- Only access the queue through a mutex.
+	*/
+void ReceiveSendMessages()
+{
+	//Buffer used for receiving data.
+	char buffer[MAX_BUFFER_SIZE]{};
+	//Account for sequence number and checksum, so this refers to the max payload size.
+	constexpr int MAX_DATA_SIZE = MAX_PACKET_SIZE - 6;
+	while (isGameRunning)
+	{
+
+		/*
+			Send all pending messages
+			- Timeout has run out
+			- isSend is activated.
+
+			Ensure send buffer isn't empty.
+		*/
+		for (auto& player_pair : player_Session_Map)
+		{
+			auto& session = player_pair.second;
+			if (session.send_buffer.empty()) continue;
+			if (GetTime() - session.reliable_transfer.time_last_packet_sent > TIMEOUT_TIMER)
+			{
+				session.reliable_transfer.toSend = true;
+			}
+			if (!session.reliable_transfer.toSend) continue;
+			//Below here, packet is to be sent.
+			
+
+			//Add sequence number to the send.
+			uint32_t network_sequence_number = htonl(session.reliable_transfer.current_sequence_number);
+			char number_buffer[4]{};
+			memcpy_s(number_buffer, 4, &network_sequence_number, 4);
+			std::string sequence_number(number_buffer, number_buffer + 4); //Casting the number to a string.
+
+			//There's a limited amount of packet space, so only send up to that limit.
+			session.bytes_sent = (session.send_buffer.size() < MAX_DATA_SIZE) ? session.send_buffer.size() : MAX_DATA_SIZE;
+			//Sequence number comes before the payload. Only send up to MAX_DATA_SiZE amount of data (bytes_sent).
+			std::string data = sequence_number + session.send_buffer.substr(0, session.bytes_sent);
+
+			//Add in checksum, convert to network order.
+			uint16_t checksum = htons(CalculateChecksum(data.size(), data.data()));
+			//Collate everything into a single string.
+			memcpy_s(number_buffer, 2, &checksum, 2); //overwrite the previous data in buffer for 0 and 1 byte.
+			std::string checksum_string(number_buffer, number_buffer + 2); //Convert checksum to number.
+			data = checksum_string + data; //checksum in front of data.
+
+			//Reset timeout.
+			session.reliable_transfer.time_last_packet_sent = GetTime();
+			session.reliable_transfer.toSend = false;
+		
+			//Send data over
+			std::lock_guard<std::mutex> socket_locker{socket_lock};
+			WriteToSocket(udp_socket, session.addrDest, data.data(), data.size());
+		}
+
+		memset(buffer, 0, MAX_BUFFER_SIZE);
+		/*
+			Receive all messages.
+			Upon receiving, add the packet to the queue.
+		*/
+		//==Read any incoming message.
+		sockaddr_storage sender_addr{}; //temporarily store sender's address.
+		int size_sockaddr = sizeof(sender_addr);
+		int bytes_read{};
+		{
+			std::lock_guard<std::mutex> socket_locker{socket_lock};
+			bytes_read = recvfrom(udp_socket, buffer, MAX_BUFFER_SIZE, 0, (sockaddr*)&sender_addr, &size_sockaddr);
+		}
+		if (bytes_read <= 0) continue; //Since it is a non-blocking socket read.
+		
+		
+		//==Check if valid.
+		//Do not accept any message that doesn't have both a checksum and a sequence number
+		//since the game always uses RDT protocol for all messages.
+		if (bytes_read < 6) continue; 
+		int number = ReadChecksumAndNumber(buffer, bytes_read);
+		if (number == -1) continue; //Checksum failed.
+		
+		//==Add to queue
+		//Exclude checksum and sequence number from the data.
+		std::string data_recv(buffer + 6, buffer + bytes_read);
+		std::lock_guard<std::mutex> packet_locker{packet_queue_lock};
+		packet_recv_queue.push(Packet{ sender_addr, data_recv, number });
+	}
+}
+
+/*
+	\brief
+	Should be called in a separate thread.
+	Will continually read the packet queue and act on it
+*/
+void HandleReceivedPackets()
+{
+	/*
+		All packets in the queue are data only (without sequence number/ack/checksum).
+		All packets in the queue are uncorrupted (checksum check has passed).
+		Sequence number/Ack number is located under Packet, as a separate variable.
+		Size of packets start from 0, don't assume there is data inside.
+
+		Use mutex to pop packets from the queue, one at a time.
+	*/
+	while (isGameRunning)
+	{
+		Packet packet;
+		{
+			std::lock_guard<std::mutex> packet_locker{ packet_queue_lock };
+			if (packet_recv_queue.empty()) continue;
+			packet = packet_recv_queue.front();
+			packet_recv_queue.pop();
+		}
+
+	}
+}
 
 /*
 	\brief
@@ -370,7 +528,26 @@ int main(int argc, char* argv[])
 	ioctlsocket(udp_socket, FIONBIO, &enable);
 
 	
+	/*
+		1st thread.
+		Will continually read messages from the udp socket, adding them to the packet queue for another function to handle.
+		Will write messages to socket as needed (for messages that require ACK) based on toSend and timeout.
 
+		Note:
+		- Only messages that require an ACK should be sent in this method. Otherwise, just write as per normal (note need to use mutex lock)
+		- To Send: Set the send buffer to the message (excluding checksum and sequence number). Set toSend to be true.
+		- Packet data in the queue has their checksum and sequence number stripped away. They are all confirmed to be uncorrupted, 
+		and the number is a separate variable from the data.
+		- Only access the queue through a mutex.
+	*/
+	std::thread thread_to_receive_and_send_message(ReceiveSendMessages);
+
+	/*
+		\brief
+		Should be called in a separate thread.
+		Will continually read the packet queue and act on it
+	*/
+	std::thread thread_to_handle_messages(HandleReceivedPackets);
 	//Will run until game program closes (server-player interaction stops).
 	GameProgram();
 	
@@ -380,6 +557,8 @@ int main(int argc, char* argv[])
 	//
 	// WSACleanup()
 	// -------------------------------------------------------------------------
+	if (thread_to_receive_and_send_message.joinable()) thread_to_receive_and_send_message.join();
+
 	closesocket(udp_socket); //Shutdown not necessary.
 	udp_socket = INVALID_SOCKET;
 	WSACleanup();

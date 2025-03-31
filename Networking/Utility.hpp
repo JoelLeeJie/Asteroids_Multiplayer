@@ -18,6 +18,8 @@ prior written consent of DigiPen Institute of Technology is prohibited.
 #define UTILITY_HPP
 #include "Checksum.hpp"
 #include <chrono>
+#include "winsock2.h"
+
 /*
 	Defines used for the client and server program.
 */

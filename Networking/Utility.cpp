@@ -18,7 +18,6 @@ prior written consent of DigiPen Institute of Technology is prohibited.
 #include <fstream>
 #include <array>
 #include <sstream>
-#include "winsock2.h"
 /*
 	\brief
 	Write to UDP socket. Shouldn't be called by multiple threads at the same time.

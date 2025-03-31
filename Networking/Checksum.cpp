@@ -25,21 +25,27 @@ uint16_t CalculateChecksum(size_t length_of_data, void* data) {
 
     uint32_t checksum = 0; //checksum starts at 0
   
-
-    // If data length is odd, copy and pad with 0
-    if (length_of_data % 2 == 1) {
-        ((uint8_t*)data)[length_of_data] = 0x00; // if the raw bytes is odd number, we add padding behind
-        length_of_data++; // as we add a new byte, we need to increase the length as well
-    }
+    //// If data length is odd, copy and pad with 0
+    //if (length_of_data % 2 == 1) {
+    //    ((uint8_t*)data)[length_of_data] = 0x00; // if the raw bytes is odd number, we add padding behind
+    //    length_of_data++; // as we add a new byte, we need to increase the length as well
+    //}
 
     uint8_t* buffer = static_cast<uint8_t*>(data); //initialise the raw data and cast it to 8 bits (1 byte) //we doing bytes by bytes & parse the raw data in bytes (updated)
 
     /*
         Treat data as sequence of 16 bit integers, adding it up.
     */
-    for (size_t i = 0; i < length_of_data; i += 2) {
+    for (size_t i = 0; i + 1 < length_of_data; i += 2) {
         uint16_t hex = (static_cast<uint16_t>(buffer[i]) << 8) | buffer[i + 1];
         checksum += hex; //add the raw hex btyes (2 bytes)
+    }
+    //When data is odd numbered, then the last byte hasn't been considered yet.
+    //Pad with 0 and treat it as a 2 byte short.
+    if (length_of_data % 2 == 1)
+    {
+        uint16_t hex = (static_cast<uint16_t>(buffer[length_of_data-1]) << 8) | 0x00;
+        checksum += hex;
     }
 
     //after adding carry the bit forward
