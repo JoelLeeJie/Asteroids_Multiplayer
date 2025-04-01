@@ -60,6 +60,11 @@ prior written consent of DigiPen Institute of Technology is prohibited.
 
 
 /*
+	From Player --> Server:
+	- If the message cannot fit into the same packet, "incomplete message" is indicated.
+*/
+
+/*
 	Represents a player session, where communications with the player is controlled through this.
 	Each player has their own session (and only one session).
 	New players get a new session, whilst reconnected players will assume back their sessions.
@@ -440,32 +445,33 @@ void HandleReceivedPackets()
 		/*
 			Types of packets
 			- ACK: [General Command ID (ACK) unsigned char][2 bytes unsigned, player id]
-			- Non ACK: Reply with ACK [General Command ID (ACK) unsigned char]
+			- Non ACK: Reply with ACK [Checksum][ACK number][General Command ID (ACK) unsigned char]
 				- player in map: [General Command ID unsigned char][2 bytes unsigned, player id]
-				- player not in map.
+				- player not in map: [General Command ID unsigned char]
 		*/
 
 		//Just discard empty packets since no command ID.
-		if (packet.data.empty()) continue; 
+		if (packet.data.empty()) continue;
 		unsigned char command_ID = packet.data[0];
 
-		//Not enough data since no player ID.
-		if (packet.data.size() < 3) continue;
-		//Get the player ID, for checking against the map.
-		uint16_t player_id{};
-		memcpy_s(&player_id, 2, packet.data.data() + 1, 2);
-		player_id = ntohs(player_id);
 
 		if (command_ID == ACK)
 		{
+			//Not enough data since no player ID.
+			if (packet.data.size() < 3) continue;
+			//Get the player ID, for checking against the map.
+			uint16_t player_id{};
+			memcpy_s(&player_id, 2, packet.data.data() + 1, 2);
+			player_id = ntohs(player_id);
+
 			//Find the player in the map.
 			std::lock_guard<std::mutex> map_lock{ session_map_lock };
 			auto iter = player_Session_Map.find((int)player_id);
 
 			//Can't be found in map, so ignore the packet.
 			if (iter == player_Session_Map.end()) continue;
-			Player_Session &session = iter->second;
-			
+			Player_Session& session = iter->second;
+
 			/*
 				Using ACK number, decide what to do with ACK.
 				If ACK == current sequence number, packet has been received successfully
@@ -478,19 +484,156 @@ void HandleReceivedPackets()
 			//==ACK matches packet sent out, meaning packet received successfully.
 			session.reliable_transfer.current_sequence_number++;
 			//Clear all data that has been sent successfully.
-			session.send_buffer = session.send_buffer.substr(session.bytes_sent); 
+			session.send_buffer = session.send_buffer.substr(session.bytes_sent);
 			session.bytes_sent = 0;
 			//Reset timers
 			session.time_last_packet_received = GetTime();
 			session.reliable_transfer.time_last_packet_sent = 20000000000000; //Reset to some time in the future to effectively set timeout to infinity.
 			//Send the remaining data in the buffer, if any.
-			if(!session.send_buffer.empty()) session.reliable_transfer.toSend = true;
+			if (!session.send_buffer.empty()) session.reliable_transfer.toSend = true;
 			continue; //Handling of packet finished.
 		}
 		//==Below here, it is a non-ACK packet (i.e. command).
-		//Send back an ACK for the sequence number.
+
 
 		
+
+		/*
+			Two scenarios
+			1. Player looking to join --> [General Command ID] only
+			- Send back [General Command ID][Player ID, 2] as JOIN_RESPONSE
+			2. Existing player --> [General Command ID][Player ID][Length of message][Command ID]...
+			- Send back ACK.
+			- Add to recv buffer if necessary.
+			In both cases, increment ack_last_packet_received if it's higher.
+		*/
+		if (command_ID == JOIN_REQUEST)
+		{
+			/*
+				Check if it's a duplicate message, like if they're an existing player but don't know yet.
+				1. Check if player in map
+				If so, then don't assign a new entry and player id. instead reuse the player id.
+				2. Send back join response using rdt (set send buffer).
+
+				Player repeatedly sends JOIN request to server until JOIN_RESPONSE is sent back.
+				Since server receives the JOIN request, it should also increment its ack of last packet received when it first receives.
+			*/
+			char ack_buffer[9]{};
+			{
+				std::lock_guard<std::mutex> map_lock{ session_map_lock };
+
+
+				/*
+					After receiving request, get its existing or new player id.
+				*/
+				int client_player_id = -1; //-1 to indicate it doesn't have a player id yet.
+				//Iterate over the map, to see if the player already is in the game (maybe they never received the JOIN_RESPONSE).
+				for (auto& player_entry : player_Session_Map)
+				{
+					//Check if they're already in the map.
+					if (!Compare_SockAddr(&packet.senderAddr, &player_entry.second.addrDest)) continue;
+					//They are already in the map.
+					client_player_id = player_entry.first;
+				}
+
+				//No player entry found for this ip address, so add in a new entry.
+				if (client_player_id == -1)
+				{
+					client_player_id = player_id;
+					/*
+						Store new player information into the map.
+					*/
+					player_Session_Map.emplace(player_id++, Player_Session{ packet.senderAddr });
+				}
+
+				//Send the information back to the player as a JOIN_RESPONSE, [Checksum, 2][ACK, 4][Command ID][Player_ID, 2].
+				uint16_t network_player_id = htons((uint16_t)client_player_id);
+
+
+				//Add in ACK number and command ID.
+				uint32_t network_response_ACK = htonl(packet.seq_or_ack_number);
+				memcpy_s(ack_buffer + 2, 4, &network_response_ACK, 4);
+				ack_buffer[6] = JOIN_RESPONSE;
+				memcpy_s(ack_buffer + 7, 2, &network_player_id, 2);
+				//Calculate and add in checksum.
+				uint16_t network_checksum = htons(CalculateChecksum(7, ack_buffer + 2));
+				memcpy_s(ack_buffer, 2, &network_checksum, 2);
+
+
+				Player_Session& session = player_Session_Map.find(client_player_id)->second;
+				session.time_last_packet_received = GetTime();
+				//Increment ack of last packet received.
+				if (session.reliable_transfer.ack_last_packet_received < packet.seq_or_ack_number)
+				{
+					session.reliable_transfer.ack_last_packet_received = packet.seq_or_ack_number;
+				}
+			}
+			//Send back JOIN response to sender.
+			{
+				std::lock_guard<std::mutex> socket_locker{ socket_lock };
+				WriteToSocket(udp_socket, packet.senderAddr, ack_buffer, 9);
+			}
+			continue;
+		}
+
+
+		/*
+			Existing Player
+
+			Just add their message (whatever it is) to the map.
+		*/
+		/*
+			*Send back an ACK for the packet received.
+			*Format: [Checksum, 2][ACK, 4][ACK command ID, 1]
+		*/
+		char ack_buffer[7]{};
+		//Add in ACK number and command ID.
+		uint32_t network_response_ACK = htonl(packet.seq_or_ack_number);
+		memcpy_s(ack_buffer + 2, 4, &network_response_ACK, 4);
+		ack_buffer[6] = ACK;
+		//Calculate and add in checksum.
+		uint16_t network_checksum = htons(CalculateChecksum(5, ack_buffer + 2));
+		memcpy_s(ack_buffer, 2, &network_checksum, 2);
+
+		//Send back ACK response to sender.
+		{
+			std::lock_guard<std::mutex> socket_locker{ socket_lock };
+			WriteToSocket(udp_socket, packet.senderAddr, ack_buffer, 7);
+		}
+		if (command_ID == COMMAND)
+		{
+			//Message format: [COMMAND][Player ID, 2][Length of Message, 2][Command ID]...[Command ID 2]
+			//Not enough data since no player ID and/or length of message.
+			if (packet.data.size() < 5) continue;
+			std::lock_guard<std::mutex> map_lock{ session_map_lock };
+			//Get the player ID, for checking against the map.
+			uint16_t player_id{};
+			memcpy_s(&player_id, 2, packet.data.data() + 1, 2);
+			player_id = ntohs(player_id);
+			auto player_session_iter = player_Session_Map.find(player_id);
+			//Invalid player ID, no such player.
+			if (player_session_iter == player_Session_Map.end()) continue;
+
+			//==From here, player is valid. 
+
+			Player_Session& session = player_session_iter->second;
+			session.time_last_packet_received = GetTime();
+			//==Check if it's a new message, by comparing packet number with the last successful packet.
+			if (session.reliable_transfer.ack_last_packet_received >= packet.seq_or_ack_number) continue;
+			//it's a new packet, so update the stored ack number.
+			session.reliable_transfer.ack_last_packet_received = packet.seq_or_ack_number;
+
+
+			//Get the message length, to indicate if message is complete or not.
+			uint16_t message_length{};
+			memcpy_s(&message_length, 2, packet.data.data() + 3, 2);
+			message_length = ntohs(message_length);
+
+			
+		}
+
+
+
 
 
 	}

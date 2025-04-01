@@ -61,11 +61,21 @@ enum CommandID
 	SERVER_BULLET_CREATION = 0x5, //Not actually creating one, it's just a collection of newly created bullet data.
 	SERVER_ASTEROID_CREATION = 0x6,
 	SERVER_COLLISION = 0x7,
+	START_GAME = 0x22
+};
+
+/*
+	Used by underlying layer to determine what kind of message it is.
+	This determines what format it will be read in. (e.g. ACK only has the command ID and player id).
+*/
+enum GeneralCommandID
+{
+	COMMAND = 0x0,
 	JOIN_REQUEST = 0x20,
 	JOIN_RESPONSE = 0x21,
-	START_GAME = 0x22,
 	ACK = 0x30
 };
+
 
 /*
 	\brief
