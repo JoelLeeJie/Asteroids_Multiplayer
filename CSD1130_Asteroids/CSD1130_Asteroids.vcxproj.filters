@@ -13,6 +13,9 @@
     <ClCompile Include="Src\Main.cpp">
       <Filter>Source</Filter>
     </ClCompile>
+    <ClCompile Include="Src\Client.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Include\Collision.h">
@@ -28,6 +31,9 @@
       <Filter>Header</Filter>
     </ClInclude>
     <ClInclude Include="Include\Main.h">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="Include\Client.hpp">
       <Filter>Header</Filter>
     </ClInclude>
   </ItemGroup>
