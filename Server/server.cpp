@@ -60,11 +60,6 @@ prior written consent of DigiPen Institute of Technology is prohibited.
 
 
 /*
-	From Player --> Server:
-	- If the message cannot fit into the same packet, "incomplete message" is indicated.
-*/
-
-/*
 	Represents a player session, where communications with the player is controlled through this.
 	Each player has their own session (and only one session).
 	New players get a new session, whilst reconnected players will assume back their sessions.
@@ -78,7 +73,7 @@ public:
 		: addrDest{ addr }
 	{
 	}
-
+	
 	void SendLongMessage(const std::string& message)
 	{
 		if (message.empty()) return;
@@ -173,7 +168,7 @@ std::mutex packet_queue_lock{};
 bool isGameRunning{ true };
 
 //Forward declarations:
-void HandleStartGame();
+//void HandleStartGame();
 
 
 /*

@@ -21,10 +21,10 @@ prior written consent of DigiPen Institute of Technology is prohibited.
 
 extern float	g_dt;
 extern double	g_appTime;
+extern bool isGameRunning;
 
 // ---------------------------------------------------------------------------
 // includes
-
 
 
 
