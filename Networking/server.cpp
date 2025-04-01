@@ -87,20 +87,25 @@ public:
 	sockaddr_storage addrDest{};
 
 	/*
-		Used to indicate how much data is to be received from the player.
-		Set upon the first packet received from the player for that frame.
-		If set to -1, packet not received yet from player for this frame.
-		If != recv_buffer.size(), it means there are still some packets to receive.
+		Indicates if the message stored in recv_buffer is complete.
+		Set to false at the start of the frame, and if the packets received from the player come with "COMMAND_INCOMPLETE".
+		Set to true when the last command packet from the player "COMMAND_COMPLETE" is received.
 	*/
-	int recv_data_to_recv{ -1 };
+	bool is_recv_message_complete = false;
 	//Stores messages received from player, cleared at the end of each frame.
+	//Only stores "COMMAND" type messages, so it doesn't store ACK or JOIN_REQUEST messages.
 	std::string recv_buffer{};
 
-	//In the case where data to send is bigger than maximum allowable packet size, it sends only a portion of the buffer and indicates how much it sent.
-	//This means the send buffer will only be cleared of (bytes_sent) amount of bytes when ack'd, and not erase unsent messages.
-	int bytes_sent{};
-	//Stores messages to send to player, cleared at the end of each frame.
-	std::string send_buffer{};
+	/*
+		Each string in the vector signifies a packet to send.
+		Packets are sent in order (FCFS).
+		Only one packet is sent at a time. The next packet can only be sent when the first packet has been ACK'd.
+
+		Each string contains [GeneralCommandID] as the first byte, indicating the type of packet it is (Either COMMAND_INCOMPLETE or COMMAND_COMPLETE).
+		ACK and JOIN_RESPONSE aren't sent this way, as they only need to be sent once without needing to be ACK'd.
+		Ensure packets confirm to MAX_PAYLOAD_SIZE (not MAX_PACKET_SIZE).
+	*/
+	std::queue<std::string> messages_to_send{};
 };
 
 /*
@@ -328,8 +333,7 @@ void ReceiveSendMessages()
 {
 	//Buffer used for receiving data.
 	char buffer[MAX_BUFFER_SIZE]{};
-	//Account for sequence number and checksum, so this refers to the max payload size.
-	constexpr int MAX_DATA_SIZE = MAX_PACKET_SIZE - 6;
+
 	while (isGameRunning)
 	{
 		std::vector<WriteData> data_to_write{};
@@ -345,14 +349,21 @@ void ReceiveSendMessages()
 			for (auto& player_pair : player_Session_Map)
 			{
 				auto& session = player_pair.second;
-				if (session.send_buffer.empty()) continue;
+				//Ensure that data being written is not empty.
+				if (session.messages_to_send.empty()) continue;
+				if (session.messages_to_send.front().empty())
+				{
+					session.messages_to_send.pop();
+					continue;
+				}
 				if (GetTime() - session.reliable_transfer.time_last_packet_sent > TIMEOUT_TIMER)
 				{
 					session.reliable_transfer.toSend = true;
 				}
 				if (!session.reliable_transfer.toSend) continue;
 				//Below here, packet is to be sent.
-
+				std::string message_to_send = session.messages_to_send.front();
+				session.messages_to_send.pop();
 
 				//Add sequence number to the send.
 				uint32_t network_sequence_number = htonl(session.reliable_transfer.current_sequence_number);
@@ -360,10 +371,7 @@ void ReceiveSendMessages()
 				memcpy_s(number_buffer, 4, &network_sequence_number, 4);
 				std::string sequence_number(number_buffer, number_buffer + 4); //Casting the number to a string.
 
-				//There's a limited amount of packet space, so only send up to that limit.
-				session.bytes_sent = (session.send_buffer.size() < MAX_DATA_SIZE) ? session.send_buffer.size() : MAX_DATA_SIZE;
-				//Sequence number comes before the payload. Only send up to MAX_DATA_SiZE amount of data (bytes_sent).
-				std::string data = sequence_number + session.send_buffer.substr(0, session.bytes_sent);
+				std::string data = sequence_number + message_to_send;
 
 				//Add in checksum, convert to network order.
 				uint16_t checksum = htons(CalculateChecksum(data.size(), data.data()));
@@ -429,7 +437,7 @@ void HandleReceivedPackets()
 		All packets in the queue are data only (without sequence number/ack/checksum).
 		All packets in the queue are uncorrupted (checksum check has passed).
 		Sequence number/Ack number is located under Packet, as a separate variable.
-		Size of packets start from 0, don't assume there is data inside.
+		Size of packets may start from 0, don't assume there is data inside.
 
 		Use mutex to pop packets from the queue, one at a time.
 	*/
@@ -475,7 +483,7 @@ void HandleReceivedPackets()
 			/*
 				Using ACK number, decide what to do with ACK.
 				If ACK == current sequence number, packet has been received successfully
-				- Increment sequence number, clear send buffer by number of bytes sent.
+				- Increment sequence number, get rid of the current packet to send the next packet.
 				- Reset timeout to infinity.
 				- If there's buffer left, set isSend to true.
 			*/
@@ -484,19 +492,19 @@ void HandleReceivedPackets()
 			//==ACK matches packet sent out, meaning packet received successfully.
 			session.reliable_transfer.current_sequence_number++;
 			//Clear all data that has been sent successfully.
-			session.send_buffer = session.send_buffer.substr(session.bytes_sent);
-			session.bytes_sent = 0;
+			if (!session.messages_to_send.empty()) session.messages_to_send.pop();
+
 			//Reset timers
 			session.time_last_packet_received = GetTime();
 			session.reliable_transfer.time_last_packet_sent = 20000000000000; //Reset to some time in the future to effectively set timeout to infinity.
 			//Send the remaining data in the buffer, if any.
-			if (!session.send_buffer.empty()) session.reliable_transfer.toSend = true;
+			if (!session.messages_to_send.empty()) session.reliable_transfer.toSend = true;
 			continue; //Handling of packet finished.
 		}
 		//==Below here, it is a non-ACK packet (i.e. command).
 
 
-		
+
 
 		/*
 			Two scenarios
@@ -514,7 +522,7 @@ void HandleReceivedPackets()
 				1. Check if player in map
 				If so, then don't assign a new entry and player id. instead reuse the player id.
 				2. Send back join response using rdt (set send buffer).
-
+				[Checksum, 2][ACK, 4][Command ID][Player_ID, 2].
 				Player repeatedly sends JOIN request to server until JOIN_RESPONSE is sent back.
 				Since server receives the JOIN request, it should also increment its ack of last packet received when it first receives.
 			*/
@@ -578,12 +586,13 @@ void HandleReceivedPackets()
 
 
 		/*
-			Existing Player
+			COMMAND_INCOMPLETE or COMMAND_COMPLETE.
 
 			Just add their message (whatever it is) to the map.
+			Set messageIncomplete to false or true depending on the general command.
 		*/
 		/*
-			*Send back an ACK for the packet received.
+			*Send back an ACK for the packet received. Don't need to for JOIN_REQUEST, as JOIN_RESPONSE is already an ACK.
 			*Format: [Checksum, 2][ACK, 4][ACK command ID, 1]
 		*/
 		char ack_buffer[7]{};
@@ -600,11 +609,15 @@ void HandleReceivedPackets()
 			std::lock_guard<std::mutex> socket_locker{ socket_lock };
 			WriteToSocket(udp_socket, packet.senderAddr, ack_buffer, 7);
 		}
-		if (command_ID == COMMAND)
+
+		/*
+			In both cases, add to the recv buffer. Set message complete to be true or false depending.
+		*/
+		if (command_ID == COMMAND_COMPLETE || command_ID == COMMAND_INCOMPLETE)
 		{
-			//Message format: [COMMAND][Player ID, 2][Length of Message, 2][Command ID]...[Command ID 2]
-			//Not enough data since no player ID and/or length of message.
-			if (packet.data.size() < 5) continue;
+			//Message format: [General Command = COMMAND][Player ID, 2][Command ID]...[Command ID 2]
+			//Not enough data since no player ID.
+			if (packet.data.size() < 3) continue;
 			std::lock_guard<std::mutex> map_lock{ session_map_lock };
 			//Get the player ID, for checking against the map.
 			uint16_t player_id{};
@@ -617,25 +630,22 @@ void HandleReceivedPackets()
 			//==From here, player is valid. 
 
 			Player_Session& session = player_session_iter->second;
-			session.time_last_packet_received = GetTime();
+			session.time_last_packet_received = GetTime(); //Reset timer.
 			//==Check if it's a new message, by comparing packet number with the last successful packet.
 			if (session.reliable_transfer.ack_last_packet_received >= packet.seq_or_ack_number) continue;
 			//it's a new packet, so update the stored ack number.
 			session.reliable_transfer.ack_last_packet_received = packet.seq_or_ack_number;
 
 
-			//Get the message length, to indicate if message is complete or not.
-			uint16_t message_length{};
-			memcpy_s(&message_length, 2, packet.data.data() + 3, 2);
-			message_length = ntohs(message_length);
-
-			
+			/*
+				Add to the player's recv buffer after removing [General Command ID] and [Player ID]
+				This is because both general command ID and player ID are no longer necessary (any message in the player recvbuffer is both a COMMAND and belongs to that player).
+				Doing this also helps to chain incomplete packets together.
+			*/
+			session.recv_buffer.insert(session.recv_buffer.end(), packet.data.begin()+3, packet.data.end());
+			if (command_ID == COMMAND_COMPLETE) session.is_recv_message_complete = true;
+			else session.is_recv_message_complete = false; //Still need to wait for more packets.
 		}
-
-
-
-
-
 	}
 }
 

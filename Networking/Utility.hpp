@@ -25,6 +25,8 @@ prior written consent of DigiPen Institute of Technology is prohibited.
 */
 //Max size of udp packet
 constexpr int MAX_PACKET_SIZE = 1000;
+//Max size of payload, excluding [Checksum][Sequence Number]
+constexpr int MAX_PAYLOAD_SIZE = MAX_PACKET_SIZE - 6;
 //Max buffer size when receiving.
 constexpr int MAX_BUFFER_SIZE = 2000;
 //Time before packet should be resent again, if no correct ACK is received.
@@ -70,7 +72,8 @@ enum CommandID
 */
 enum GeneralCommandID
 {
-	COMMAND = 0x0,
+	COMMAND_COMPLETE = 0x0,
+	COMMAND_INCOMPLETE = 0x1,
 	JOIN_REQUEST = 0x20,
 	JOIN_RESPONSE = 0x21,
 	ACK = 0x30
