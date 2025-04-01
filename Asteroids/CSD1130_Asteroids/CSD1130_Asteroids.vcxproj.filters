@@ -16,6 +16,12 @@
     <ClCompile Include="Src\Client.cpp">
       <Filter>Source</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\Checksum.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Utility.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Include\Collision.h">
@@ -34,6 +40,12 @@
       <Filter>Header</Filter>
     </ClInclude>
     <ClInclude Include="Include\Client.hpp">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Checksum.hpp">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Utility.hpp">
       <Filter>Header</Filter>
     </ClInclude>
   </ItemGroup>

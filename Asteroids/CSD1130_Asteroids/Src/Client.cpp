@@ -2,7 +2,6 @@
 #include "Client.hpp"
 
 
-
 //Player transform(YT)
 
 //[0x1][4 bytes, X position][4 bytes, Y position]

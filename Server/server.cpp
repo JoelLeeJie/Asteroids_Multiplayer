@@ -186,7 +186,7 @@ void GameProgram()
 {
 	//Wait for players to join.
 	//HandleStartGame();
-	while (true)
+	while (isGameRunning)
 	{
 		/*
 			Structure of Program:
@@ -811,7 +811,7 @@ int main(int argc, char* argv[])
 	// WSACleanup()
 	// -------------------------------------------------------------------------
 	if (thread_to_receive_and_send_message.joinable()) thread_to_receive_and_send_message.join();
-
+	if (thread_to_handle_messages.joinable()) thread_to_handle_messages.join();
 	closesocket(udp_socket); //Shutdown not necessary.
 	udp_socket = INVALID_SOCKET;
 	WSACleanup();

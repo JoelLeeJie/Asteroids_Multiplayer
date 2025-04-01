@@ -49,6 +49,9 @@ int WINAPI WinMain(HINSTANCE instanceH, HINSTANCE prevInstanceH, LPSTR command_l
 	//set background color
 	AEGfxSetBackgroundColor(0.0f, 0.0f, 0.0f);
 
+	/*
+		Contact Server to add as player.
+	*/
 
 
 	GameStateMgrInit(GS_ASTEROIDS);
