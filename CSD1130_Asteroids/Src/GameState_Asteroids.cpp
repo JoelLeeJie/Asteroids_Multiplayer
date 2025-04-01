@@ -255,6 +255,32 @@ void Test_ReadThenWriteBulletRoundTrip()
 	printf("Test_ReadThenWriteBulletRoundTrip passed.\n");
 }
 
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//NETWORKING GLOBAL VARIABLES/FUNCTIONS
+
+
+auto program_start = std::chrono::steady_clock::now(); // Starts at 0
+
+unsigned int mySession_ID = 28; //random first
+
+std::map<unsigned int, Player> players;
+std::map<unsigned int, std::map<unsigned int, Bullet>> new_bullets;
+std::map<unsigned int, std::map<unsigned int, Bullet>> all_bullets;
+unsigned int bullet_ID = 0;
+
+
+float get_TimeStamp() {
+	auto now = std::chrono::steady_clock::now();
+	return (float)std::chrono::duration<double>(now - program_start).count();
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
 /******************************************************************************/
 /*!
 \brief
@@ -392,13 +418,29 @@ void GameStateAsteroidsLoad(void)
 /******************************************************************************/
 void GameStateAsteroidsInit(void)
 {
+
+	///////////////////////////////////////////////
+	//PLACE THE INPUT CONNECTION HERE OR PLACED THE CONNECTION IN THE LOAD
+	//////////////////////////////////////////////
+
+	//////////////////////////////////////////////
+	//WAIT FOR THE SERVER TO SEND WHETHER THE CONNECTION IS GOOD OR SMTH/ (WE NEED SESSION ID)
+	// 
+	// 
+	//              FEEL FREE TO CHANGE, JUST AN IDEA
+	// 
+	// 
+	//IF NOT CLIENT JUST CONNECT IF GOOD, ELSE JUST QUIT IF THE CONNECTION IS LIKE BAD
+	// OR PLACE A WHILE LOOP TO PROMPT THE CLIENT UNTIL SUCCESSFUL THEN MOVE ON
+	////////////////////////////////////////////////////////////////////////////////
+
+
 	// create the main ship
 	AEVec2 scale;
 	AEVec2Set(&scale, SHIP_SCALE_X, SHIP_SCALE_Y);
 	spShip = gameObjInstCreate(TYPE_SHIP, &scale, nullptr, nullptr, 0.0f);
 	AE_ASSERT(spShip);
 	sGameObjInstNum++;
-
 
 
 	for (int i = 0; i < 4; i++)
@@ -420,6 +462,29 @@ void GameStateAsteroidsInit(void)
 	sScore      = 0;
 	sShipLives  = SHIP_INITIAL_NUM;
 	runGame = true;
+
+
+	//SEND THE SHIP INFO TO THE SERVER
+	///////////////////////////////////////////////////////////////////////////////
+	//ONLY THE SHIP NEED TO BE SENT TO THE SERVER DURING INIT
+	Player player;
+
+	player.Position_X = 0.f;
+	player.Position_Y = 0.f;
+	player.Velocity_X = 0.f;
+	player.Velocity_Y = 0.f;
+
+	player.Acceleration_X = 0.f;
+	player.Acceleration_Y = 0.f;
+
+	player.Rotation = 0.f;
+
+	players[mySession_ID] = player; //Add Players to the Map
+	std::string buffer = Write_PlayerTransform(player);
+
+	//Write_To_Socket(client_socket, message.size(), message.data());
+	
+	/////////////////////////////////////////
 }
 
 /******************************************************************************/
@@ -446,6 +511,13 @@ void GameStateAsteroidsUpdate(void)
 	// v1 = a*t + v0		//This is done when the UP or DOWN key is pressed 
 	// Pos1 = v1*t + Pos0
 	float deltaTime = (float)AEFrameRateControllerGetFrameTime();
+
+	//RECALCULATE TIME STAMP AT THE START OF THE PROGRAM
+	program_start = std::chrono::steady_clock::now(); // Starts at 0
+
+	//Acceleration
+	AEVec2 addedAccel{};
+
 	if (sShipLives < 0 || sScore >= 5000) runGame = false;
 	if (AEInputCheckCurr(AEVK_UP) && runGame == true)
 	{
@@ -501,7 +573,7 @@ void GameStateAsteroidsUpdate(void)
 
 
 	// Shoot a bullet if space is triggered (Create a new object instance)
-	if (AEInputCheckTriggered(AEVK_SPACE) && runGame == true)
+	if(AEInputCheckTriggered(AEVK_SPACE) && runGame == true)
 	{
 		// Get the bullet's direction according to the ship's direction
 		// Set the velocity
@@ -512,6 +584,19 @@ void GameStateAsteroidsUpdate(void)
 
 		gameObjInstCreate(TYPE_BULLET, &scale, &spShip->posCurr, &vel, spShip->dirCurr);
 		sGameObjInstNum++;
+
+		//ADD THE NEW BULLETS TO THE NEW BULLET MAP
+		Bullet bullet;
+		bullet.Position_X = spShip->posCurr.x;
+		bullet.Position_Y = spShip->posCurr.y;
+		bullet.Rotation = spShip->dirCurr;
+		bullet.Velocity_X = vel.x;
+		bullet.Velocity_Y = vel.y;
+		bullet.Time_Stamp = get_TimeStamp();
+
+		new_bullets[mySession_ID][bullet_ID] = bullet;
+		bullet_ID++;
+
 	}
 
 
@@ -531,6 +616,39 @@ void GameStateAsteroidsUpdate(void)
 		pInst->posPrev.x = pInst->posCurr.x;
 		pInst->posPrev.y = pInst->posCurr.y;
 	}
+
+
+	//////////////////////////////////////////////////
+	//UPDATE THE NEW PLAYER VALUES TO THE PLAYERS MAP
+	//Not sure about the position, if we should update now or update later together after receving?
+	//read the prev pos, later after receiving, we will update together
+	
+	auto it = players.find(mySession_ID);
+
+	if (it != players.end()) {
+
+		it->second.Position_X = spShip->posPrev.x;
+		it->second.Position_Y = spShip->posPrev.y;
+		
+		it->second.Velocity_X = spShip->velCurr.x;
+		it->second.Velocity_Y = spShip->velCurr.y;
+		it->second.Acceleration_X = addedAccel.x;
+		it->second.Acceleration_Y = addedAccel.y;
+		it->second.Rotation = spShip->dirCurr;
+
+	}
+
+	/////////////////////////////////////////////////////////
+	/////////////////////////////////////////////////////////
+	// Things to Note from here:
+	// Pass player transform
+	// Pass new bullet map
+	// 
+	// To SERVER
+	////////////////////////////////////////////////////////
+
+
+
 
 
 

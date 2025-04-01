@@ -168,6 +168,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Include\Client.hpp" />
     <ClInclude Include="Include\Collision.h" />
     <ClInclude Include="Include\GameStateList.h" />
     <ClInclude Include="Include\GameStateMgr.h" />
@@ -175,6 +176,7 @@
     <ClInclude Include="Include\Main.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Src\Client.cpp" />
     <ClCompile Include="Src\Collision.cpp" />
     <ClCompile Include="Src\GameStateMgr.cpp" />
     <ClCompile Include="Src\GameState_Asteroids.cpp" />
