@@ -78,6 +78,33 @@ public:
 		: addrDest{ addr }
 	{
 	}
+
+	void SendLongMessage(const std::string& message)
+	{
+		if (message.empty()) return;
+		std::string long_message = message;
+		while (true)
+		{
+			//The last part of the message, add COMMAND_COMPLETE to indicate it is complete.
+			if (long_message.size() <= MAX_PAYLOAD_SIZE - 1)
+			{
+				long_message = (char)(COMMAND_COMPLETE) + long_message;
+				//String length is less than or equal to max payload size, so just push it all as one packet.
+				messages_to_send.push(long_message);
+				return; //All parts of the message have been sent.
+			}
+			else
+			{
+				//Add incomplete, to show that there are more packets on the way.
+				long_message = (char)(COMMAND_INCOMPLETE)+long_message;
+				//Can only send MAX_PAYLOAD_SIZE for each packet, as 6 extra bytes are left for seq number and checksum.
+				messages_to_send.push(long_message.substr(0, MAX_PAYLOAD_SIZE));
+				//Move to the next chunk of the message.
+				long_message = long_message.substr(MAX_PAYLOAD_SIZE);
+			}
+			
+		}
+	}
 	//Used to control reliable data transfer.
 	Reliable_Transfer reliable_transfer{};
 	//Used to determine if a player should be forcibly disconnected, like after X seconds of no response.
@@ -100,6 +127,7 @@ public:
 		Each string in the vector signifies a packet to send.
 		Packets are sent in order (FCFS).
 		Only one packet is sent at a time. The next packet can only be sent when the first packet has been ACK'd.
+		Don't include checksum or seq number as they will be automatically added.
 
 		Each string contains [GeneralCommandID] as the first byte, indicating the type of packet it is (Either COMMAND_INCOMPLETE or COMMAND_COMPLETE).
 		ACK and JOIN_RESPONSE aren't sent this way, as they only need to be sent once without needing to be ACK'd.
