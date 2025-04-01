@@ -46,9 +46,7 @@ extern bool isGameRunning;
 #include <chrono>
 #include <filesystem>
 #include <fstream>
-
-
-
+#include <utility>
 
 
 
@@ -60,6 +58,8 @@ extern bool isGameRunning;
 #include "GameState_Asteroids.h"
 #include "Collision.h"
 #include "Client.hpp"
+#include "../Checksum.hpp"
+#include "../Utility.hpp"
 
 #endif
 

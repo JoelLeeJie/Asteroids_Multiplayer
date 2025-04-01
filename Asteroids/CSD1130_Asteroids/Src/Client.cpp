@@ -73,7 +73,7 @@ std::string Write_PlayerTransform(Player player) {
 
 }
 
-void Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& player_map) {
+void Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& player_map, std::vector<unsigned int>& players_to_create) {
 
 	if (buffer.empty()) {
 
@@ -136,6 +136,7 @@ void Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& p
 		if (it == player_map.end()) {
 
 			player_map[static_cast<unsigned int>(player_ID)] = player;
+			players_to_create.push_back(player_ID);
 
 		}
 		else {
@@ -219,7 +220,7 @@ std::string Write_NewBullet(unsigned int session_ID, std::map<unsigned int, Bull
 
 
 
-void Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>& bullets_map, std::map<unsigned int, Player> player_map) {
+void Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>& bullets_map, std::map<unsigned int, Player> player_map, std::vector<std::pair<unsigned int, unsigned int>>& other_bullets) {
 
 	if (buffer.empty()) {
 
@@ -315,7 +316,7 @@ void Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsign
 					new_bullet_map[static_cast<unsigned int>(bullet_id)] = new_bullet;
 
 					bullets_map[static_cast<unsigned int>(player_ID)] = new_bullet_map;
-
+					other_bullets.push_back(std::pair<unsigned int, unsigned int>(player_ID, bullet_id));
 				}
 				else {
 

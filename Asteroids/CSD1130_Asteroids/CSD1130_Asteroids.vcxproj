@@ -168,8 +168,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\Checksum.hpp" />
     <ClInclude Include="..\..\Utility.hpp" />
+    <ClInclude Include="Checksum.hpp" />
     <ClInclude Include="Include\Client.hpp" />
     <ClInclude Include="Include\Collision.h" />
     <ClInclude Include="Include\GameStateList.h" />

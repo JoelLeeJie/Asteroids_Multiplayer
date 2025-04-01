@@ -42,10 +42,10 @@
     <ClInclude Include="Include\Client.hpp">
       <Filter>Header</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\Checksum.hpp">
+    <ClInclude Include="..\..\Utility.hpp">
       <Filter>Header</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\Utility.hpp">
+    <ClInclude Include="Checksum.hpp">
       <Filter>Header</Filter>
     </ClInclude>
   </ItemGroup>

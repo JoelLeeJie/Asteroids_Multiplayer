@@ -10,9 +10,8 @@
 #include <map>
 #include <vector>
 #include <queue>
-#include "Utility.hpp"
 #include <mutex>
-
+#include "../Utility.hpp"
 /*
 	Represents a player session, where communications with the server is controlled through this.
 	Note: addrDest needs to be set before this struct can be used for sending/receiving.
@@ -135,8 +134,10 @@ struct CollisionEvent {
 };
 
 extern std::map<unsigned int, Player> players; //not used yet
-extern std::map<unsigned int, std::map<unsigned int, Bullet>> new_bullets; //not used yet
-extern std::map<unsigned int, std::map<unsigned int, Bullet>> all_bullets; //not used yet
+extern std::vector<unsigned int> new_players;
+extern std::map<unsigned int, Bullet> new_bullets; //list of bullets created by player
+extern std::map<unsigned int, std::map<unsigned int, Bullet>> all_bullets; //all the bullets
+extern std::vector<std::pair<unsigned int, unsigned int>> new_otherbullets; //list of bullets created by other players
 
 extern unsigned int bullet_ID; //start from 0
 // 
@@ -145,10 +146,10 @@ extern unsigned int bullet_ID; //start from 0
 
 
 std::string Write_PlayerTransform(Player player);
-void Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& player_map);
+void Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& player_map, std::vector<unsigned int>& players_to_create);
 
 std::string Write_NewBullet(unsigned int session_ID,std::map<unsigned int, Bullet>& new_bullets);
-void Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>&, std::map<unsigned int, Player> player_map);
+void Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>&, std::map<unsigned int, Player> player_map, std::vector<std::pair<unsigned int, unsigned int>>&);
 
 std::string Write_AsteroidCollision(unsigned int session_ID, std::vector<CollisionEvent>& all_collisions);
 void Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, Asteroids>& Asteroid_map);
