@@ -1291,14 +1291,14 @@ GameObjInst* gameObjInstCreate(int player_id, int object_id, unsigned long type,
 			pInst->Player_ID = player_id;
 
 			if (player_id == -1) {
-				std::cout << "OMG, the player ID is 0 means does not Exist\n";
+				PrintString("OMG, the player ID is 0 means does not Exist");
 			}
 
 			if (object_id == -1) {
 				//means that this is the player
 				//player dont have object id, only player_id
 
-				std::cout << "A new player is being created!\n";
+				PrintString("A new player is being created!");
 
 			}
 
