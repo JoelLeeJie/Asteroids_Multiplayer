@@ -175,6 +175,7 @@ unsigned int bullet_ID = 1;
 std::vector<unsigned int> new_players;
 std::vector<std::pair<unsigned int, unsigned int>> new_otherbullets; //list of bullets created by other players
 
+
 float get_TimeStamp() {
 	auto now = std::chrono::steady_clock::now();
 	return (float)std::chrono::duration<double>(now - program_start).count();
@@ -439,6 +440,44 @@ void GameStateAsteroidsUpdate(void)
 	AEVec2 addedAccel{};
 
 	if (sShipLives < 0 || sScore >= 5000) runGame = false;
+
+	//For debug purposes only.
+#ifdef _DEBUG
+	if (AEInputCheckTriggered(AEVK_0) && runGame == true)
+	{
+		std::lock_guard<std::mutex> player_lock{ this_player_lock };
+		std::string firefly_description =
+			"Firefly is a young woman with long, silvery-blonde hair with a teal ombre that reaches her waist, very fair skin, and eyes that are a mix of deep ocean blue and sunset pink.\n\n"
+			"She wears a brown blazer over a green and white dress with a yellow bow tied in the front. Her sleeves are detached and about wrist length, held with black bracelets — right side with a white flower decoration while the left is plain. She also wears a brown headband with a black bow on the left side of her head that she tore from a flag on the battlefield, along with two green feathers. On her legs she wears thigh-high stockings that fade from teal to a dark brown from top to bottom. The tops of the stockings are lined with gold, and her footwear consists of black heels with a base of white, as well as a pair of green gems in the center along with teal, ruffled collars that wrap around her ankles.\n\n"
+			"A member of the Stellaron Hunters, clad in a set of mechanized armor known as \"SAM.\" Her character is marked by unwavering loyalty and steely resolve.\n"
+			"Engineered as a weapon against the Swarm, she experiences accelerated growth, but a tragically shortened lifespan.\n"
+			"She joined the Stellaron Hunters in a quest for a chance at \"life,\" seeking to defy her fated demise.\n\n"
+			"Within the transparent incubation pod, she lay submerged in frigid artificial amniotic fluid, enclosed in a pristine white egg.\n"
+			"As the container trembled, she floated, and instinctively reached the cold and soft edges. She presses against the pod's walls tightly, curled up in a corner, as if that would make her body feel warmer.\n\n"
+			"She heard something heavy fall and the clamor of metal clashing. Intermittent haste-filled footsteps resounded, and the incubator started to shake...\n"
+			"\"Warriors, it is time to awaken...\"\n"
+			"\"For Her Majesty...\"\n"
+			"A pair of mechanical hands scooped her up as blinding light rent the world asunder. She forgot to weep.\n"
+			"\"Feel glory in your birth...\"\n"
+			"\"For Her Majesty...\"\n"
+			"She opened her eyes, yet failed to find the speaker.\n"
+			"She rose up and advanced through heavy curtains, venturing deeper into the palace.\n"
+			"\"Accept your honor, and your destiny...\"\n"
+			"\"For Her Majesty...\"\n"
+			"The cadence of footsteps in unison reverberated through the desolate palace.\n\n"
+			"She traversed the unattended vast garden, navigating through colossal insectoid carcasses and numerous incubators... until finally, she arrived at the resplendent council chamber, where a woman with a blurry face was seated upon the throne, her hands hanging wearily.\n\n"
+			"\"Don't look up.\"\n"
+			"Someone approached her, whispering softly. The person bore an identification tag, AR-26702. What does that signify?\n"
+			"She glanced at herself, AR-26710.\n\n"
+			"\"Come closer... my child...\"\n"
+			"A distant voice emanated from the depths of her mind, casting an inexplicable frenzy upon her consciousness.\n"
+			"She obediently approached the Empress and knelt down, kissing her fingertips.\n\n"
+			"The Empress's touch felt as icy and unyielding as solid ice, momentarily stirring a flicker of perplexity amidst her frenzy.\n"
+			"\"Ignite yourself to the last moment, for the future of Glamoth...\"";
+		this_player.SendLongMessage(firefly_description);
+	}
+#endif
+
 	if (AEInputCheckCurr(AEVK_UP) && runGame == true)
 	{
 		//Normalized forwards direction.
@@ -782,11 +821,6 @@ void GameStateAsteroidsUpdate(void)
 
 
 
-
-
-
-
-
 	/////////////////////////////////////////////////////////
 	/////////////////////////////////////////////////////////
 	// WRITE TO SERVER
@@ -799,94 +833,105 @@ void GameStateAsteroidsUpdate(void)
 
 	//need a function to combine all the strings
 
-	std::string player_transform = Write_PlayerTransform(players[this_player.player_ID]);
-	std::string player_bullets = Write_NewBullet(this_player.player_ID, new_bullets);
+	{
+		std::lock_guard<std::mutex> player_lock{ this_player_lock };
+		std::string message_to_SERVER{};
+		message_to_SERVER += Write_PlayerTransform(players[this_player.player_ID]);
+		message_to_SERVER += Write_NewBullet(this_player.player_ID, new_bullets);
 
+		//std::cout << message_to_SERVER.c_str();
 
-
+		this_player.SendLongMessage(message_to_SERVER);
+	}
 
 	/////////////////////////////////////////////////////////
 	/////////////////////////////////////////////////////////
 	// READING FROM SERVER
 	////////////////////////////////////////////////////////
 
+	{
+		std::lock_guard<std::mutex> player_lock{ this_player_lock };
 
-	if (!this_player.recv_buffer.empty() && this_player.is_recv_message_complete) {
-
-
-		//we need to split first (ROLL EYE)
-		//we need to do bytes checking, function should return the number of bytes read
-
-		int bytes_read = 0;
-
-		while (bytes_read <= this_player.recv_buffer.size()) {
-
-			uint8_t Command_ID = this_player.recv_buffer[bytes_read]; //lets say 0
-			bytes_read += 1;
-			std::string result = this_player.recv_buffer.substr(bytes_read); // Starts at index 1 and goes to the end
-			                                                                 // reads 5, read next command
-
-			if (Command_ID == 0x4) { //server_player_transform
+		if (!this_player.recv_buffer.empty() && this_player.is_recv_message_complete) {
 
 
-				bytes_read += Read_PlayersTransform(result, players, new_players); //add to player map, lets say 5
-				//so now bytes read will be 6
+			//we need to split first (ROLL EYE)
+			//we need to do bytes checking, function should return the number of bytes read
 
-				//create new players
-				for (unsigned int player : new_players) {
+			int bytes_read = 0;
 
-					auto it = players.find(player);
+			while (bytes_read <= this_player.recv_buffer.size()) {
 
+				uint8_t Command_ID = this_player.recv_buffer[bytes_read]; //lets say 0
+				bytes_read += 1;
+				std::string result = this_player.recv_buffer.substr(bytes_read); // Starts at index 1 and goes to the end
+				// reads 5, read next command
 
-					if (it != players.end()) {
-
-						AEVec2 scale;
-						AEVec2 pos{ it->second.Position_X, it->second.Position_Y };
-						AEVec2 vel{ it->second.Velocity_X, it->second.Velocity_Y };
-
-						AEVec2Set(&scale, SHIP_SCALE_X, SHIP_SCALE_Y);
-						gameObjInstCreate((int)player, -1, TYPE_SHIP, &scale, &pos, &vel, it->second.Rotation);
-						sGameObjInstNum++;
-
-					}
-				}
+				if (Command_ID == 0x4) { //server_player_transform
 
 
-			}
-			else if (Command_ID == 0x5) { //server_bullet_transform
+					bytes_read += Read_PlayersTransform(result, players, new_players); //add to player map, lets say 5
+					//so now bytes read will be 6
 
-				bytes_read += Read_New_Bullets(result, all_bullets, players, new_otherbullets);
+					//create new players
+					for (unsigned int player : new_players) {
 
-				for (std::pair<unsigned int, unsigned int> one_bullet : new_otherbullets) {
+						auto it = players.find(player);
 
-					//check whether the bullet exisits in the all bullet map or not
-					auto it = all_bullets.find(one_bullet.first);
 
-					if (it != all_bullets.end()) {
+						if (it != players.end()) {
 
-						//if that sepecific bullet exists in the map
-						auto iter = it->second.find(one_bullet.second);
-						if (iter != it->second.end()) {
+							AEVec2 scale;
+							AEVec2 pos{ it->second.Position_X, it->second.Position_Y };
+							AEVec2 vel{ it->second.Velocity_X, it->second.Velocity_Y };
 
-							AEVec2 scale{ BULLET_SCALE_X, BULLET_SCALE_Y };
-							AEVec2 pos{ iter->second.Position_X, iter->second.Position_Y };
-							AEVec2 vel{ iter->second.Velocity_X, iter->second.Velocity_Y };
-
-							//gameObjInstCreate(TYPE_BULLET, &scale, &spShip->posCurr, &vel, spShip->dirCurr);
-							gameObjInstCreate(this_player.player_ID, one_bullet.second, TYPE_BULLET, &scale, &pos, &vel, iter->second.Rotation);
+							AEVec2Set(&scale, SHIP_SCALE_X, SHIP_SCALE_Y);
+							gameObjInstCreate((int)player, -1, TYPE_SHIP, &scale, &pos, &vel, it->second.Rotation);
 							sGameObjInstNum++;
 
 						}
 					}
 
+
 				}
+				else if (Command_ID == 0x5) { //server_bullet_transform
+
+					bytes_read += Read_New_Bullets(result, all_bullets, players, new_otherbullets);
+
+					for (std::pair<unsigned int, unsigned int> one_bullet : new_otherbullets) {
+
+						//check whether the bullet exisits in the all bullet map or not
+						auto it = all_bullets.find(one_bullet.first);
+
+						if (it != all_bullets.end()) {
+
+							//if that sepecific bullet exists in the map
+							auto iter = it->second.find(one_bullet.second);
+							if (iter != it->second.end()) {
+
+								AEVec2 scale{ BULLET_SCALE_X, BULLET_SCALE_Y };
+								AEVec2 pos{ iter->second.Position_X, iter->second.Position_Y };
+								AEVec2 vel{ iter->second.Velocity_X, iter->second.Velocity_Y };
+
+								//gameObjInstCreate(TYPE_BULLET, &scale, &spShip->posCurr, &vel, spShip->dirCurr);
+								gameObjInstCreate(this_player.player_ID, one_bullet.second, TYPE_BULLET, &scale, &pos, &vel, iter->second.Rotation);
+								sGameObjInstNum++;
+
+							}
+						}
+
+					}
+
+				}
+
 
 			}
 
-
 		}
-
 	}
+
+
+	
 
 
 	/////////////////////////////////////////////////////////

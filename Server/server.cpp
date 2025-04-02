@@ -85,6 +85,7 @@ public:
 				long_message = (char)(COMMAND_COMPLETE) + long_message;
 				//String length is less than or equal to max payload size, so just push it all as one packet.
 				messages_to_send.push(long_message);
+				reliable_transfer.toSend = true;
 				return; //All parts of the message have been sent.
 			}
 			else
