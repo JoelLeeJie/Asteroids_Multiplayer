@@ -11,7 +11,7 @@
 #include <vector>
 #include <queue>
 #include <mutex>
-#include "../Utility.hpp"
+#include "..\Utility.hpp"
 /*
 	Represents a player session, where communications with the server is controlled through this.
 	Note: addrDest needs to be set before this struct can be used for sending/receiving.
