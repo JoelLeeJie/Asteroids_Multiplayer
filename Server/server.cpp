@@ -245,6 +245,9 @@ void PrintString(const std::string& message_to_print)
 */
 void GameProgram()
 {
+	// to keep track of time for asteroid spawn
+	using Clock = std::chrono::steady_clock;
+	auto lastAsteroidSpawn = Clock::now();
 	//Wait for players to join.
 	//HandleStartGame();
 	while (isGameRunning)
@@ -263,6 +266,16 @@ void GameProgram()
 			- Asteroid destruction (who destroyed what).
 		*/
 		//==Ensure all messages received and ACK'd.
+
+
+		auto now = Clock::now();
+		auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastAsteroidSpawn);
+
+		if (elapsed.count() >= 2) {
+			for (int i = 0; i < 3; ++i)
+				CreateNewAsteroid();
+			lastAsteroidSpawn = now;
+		}
 
 		// Receive message from clients
 		{
