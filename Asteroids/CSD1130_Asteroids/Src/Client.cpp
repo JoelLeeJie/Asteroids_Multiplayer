@@ -383,7 +383,7 @@ std::string Write_AsteroidCollision(unsigned int session_ID, std::vector<Collisi
 		// Convert all to network byte order
 		obj_ID = htonl(obj_ID);
 		asteroid_ID = htonl(asteroid_ID);
-		time_stamp = htonl(time_stamp);
+		time_stamp = htonf(time_stamp);
 
 		// Write to buffer
 		std::memcpy(&result[offset_of_bytes], &obj_ID, 4);
@@ -428,20 +428,28 @@ void Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, As
 		// Position
 		std::memcpy(&temp.Position_x, &buffer[offset + 4], 4);
 		std::memcpy(&temp.Position_y, &buffer[offset + 8], 4);
+		temp.Position_x = ntohf(temp.Position_x);
+		temp.Position_y = ntohf(temp.Position_y);
 
 		// Velocity
 		std::memcpy(&temp.Velocity_x, &buffer[offset + 12], 4);
 		std::memcpy(&temp.Velocity_y, &buffer[offset + 16], 4);
+		temp.Velocity_x = ntohf(temp.Velocity_x);
+		temp.Velocity_y = ntohf(temp.Velocity_y);
 
 		// Rotation
 		std::memcpy(&temp.Rotation, &buffer[offset + 20], 4);
+		temp.Rotation = ntohf(temp.Rotation);
 
 		// Scale
 		std::memcpy(&temp.Scale_x, &buffer[offset + 24], 4);
 		std::memcpy(&temp.Scale_y, &buffer[offset + 28], 4);
+		temp.Scale_x = ntohf(temp.Scale_x);
+		temp.Scale_y = ntohf(temp.Scale_y);
 
 		// Time Stamp
 		std::memcpy(&temp.time_of_creation, &buffer[offset + 32], 4);
+		temp.time_of_creation = ntohf(temp.time_of_creation);
 
 		Asteroid_map[asteroid_ID] = temp;
 	}
