@@ -221,7 +221,7 @@ bool isGameRunning{ true };
 void ReadBullet(std::istream& input, unsigned short playerID);
 void WriteBullet(std::ostream& output);
 void CreateNewAsteroid();
-void WriteBullet(std::ostream& output);
+void WriteNewAsteroids(std::ostream& output);
 void HandleStartGame();
 
 // ------------------------------------------------Entry Point--------------------------------------------------------
@@ -984,7 +984,8 @@ format:
 /******************************************************************************/
 void WriteBullet(std::ostream& output)
 {
-	output.write(reinterpret_cast<const char*>(SERVER_BULLET_CREATION), sizeof(char));
+	char commandID = SERVER_BULLET_CREATION;
+	output.write(reinterpret_cast<const char*>(&commandID), sizeof(char));
 
 	unsigned short numPlayers = static_cast<unsigned short>(currentPlayers.size());
 	output.write(reinterpret_cast<const char*>(&numPlayers), sizeof(unsigned short));
@@ -1079,7 +1080,8 @@ Write the asteroids into the output buffer
 /******************************************************************************/
 void WriteNewAsteroids(std::ostream& output)
 {
-	output.write(reinterpret_cast<const char*>(SERVER_ASTEROID_CREATION), sizeof(char));
+	char commandID = SERVER_ASTEROID_CREATION;
+	output.write(reinterpret_cast<const char*>(&commandID), sizeof(char));
 	unsigned short numAsteroids = static_cast<unsigned short>(newAsteroidQueue.size());
 	output.write(reinterpret_cast<const char*>(&numAsteroids), sizeof(unsigned short));
 
