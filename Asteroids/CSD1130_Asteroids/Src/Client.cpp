@@ -1,6 +1,7 @@
 #include <main.h>
 #include "Client.hpp"
 #include "Main.h"
+//#include "GameState_Asteroids.cpp"
 
 //Player transform(YT)
 
@@ -230,7 +231,7 @@ std::string Write_NewBullet(unsigned int session_ID, std::map<unsigned int, Bull
 
 		int offset = 3 + j * 28;
 
-		uint32_t bullet_id = 0;
+		uint32_t bullet_id = 1;
 		std::memcpy(&bullet_id, &i->first, 4);
 
 
@@ -469,23 +470,25 @@ std::string Write_AsteroidCollision(unsigned int session_ID, std::vector<Collisi
 	return result;
 }
 
-void Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, Asteroids>& Asteroid_map)
+int Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, Asteroids>& Asteroid_map, std::vector<std::pair<unsigned int, Asteroids>>& new_asteroids)
 {
 	// Check empty string
 	if (buffer.empty()) {
-		return;
+		return 0;
 	}
 
 	// Check if wrong string was sent to this function
 	if (buffer[0] != 0x6) {
 		PrintString("Read_AsteroidCreations: Wrong Command ID sent to this function");
-		return;
+		return 0;
 	}
 
 	// Getting number of Asteroids
 	uint16_t num_asteroids = 0;
 	std::memcpy(&num_asteroids, &buffer[1], 2);
 	num_asteroids = ntohs(num_asteroids);
+
+	int bytes_read = 3;
 
 	for (int i = 0; i < num_asteroids; i++) {
 		int offset = 3 + i * 36;
@@ -495,47 +498,63 @@ void Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, As
 		// Copy Asteroid ID
 		std::memcpy(&asteroid_ID, &buffer[offset], 4);
 		asteroid_ID = ntohl(asteroid_ID);
+		asteroid_ID = ntohl(asteroid_ID);
 
 		// Copy the rest of Asteroid information into a temp Asteroid object
 		// Position
 		std::memcpy(&temp.Position_x, &buffer[offset + 4], 4);
 		std::memcpy(&temp.Position_y, &buffer[offset + 8], 4);
+		temp.Position_x = ntohf(temp.Position_x);
+		temp.Position_y = ntohf(temp.Position_y);
 
 		// Velocity
 		std::memcpy(&temp.Velocity_x, &buffer[offset + 12], 4);
 		std::memcpy(&temp.Velocity_y, &buffer[offset + 16], 4);
+		temp.Velocity_x = ntohf(temp.Velocity_x);
+		temp.Velocity_y = ntohf(temp.Velocity_y);
 
 		// Rotation
 		std::memcpy(&temp.Rotation, &buffer[offset + 20], 4);
+		temp.Rotation = ntohf(temp.Rotation);
 
 		// Scale
 		std::memcpy(&temp.Scale_x, &buffer[offset + 24], 4);
 		std::memcpy(&temp.Scale_y, &buffer[offset + 28], 4);
+		temp.Scale_x = ntohf(temp.Scale_x);
+		temp.Scale_y = ntohf(temp.Scale_y);
 
 		// Time Stamp
 		std::memcpy(&temp.time_of_creation, &buffer[offset + 32], 4);
+		temp.time_of_creation = ntohf(temp.time_of_creation);
 
 		Asteroid_map[asteroid_ID] = temp;
+		new_asteroids.push_back({ asteroid_ID, temp });
+		bytes_read += 36;
 	}
+	return bytes_read;
 }
 
-void Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>& all_bullets, std::map<unsigned int, Asteroids>& Asteroid_map)
+int Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>& all_bullets, 
+							std::map<unsigned int, Asteroids>& Asteroid_map, std::vector<std::pair<unsigned int, unsigned int>>& bullet_destruction, 
+							std::vector<unsigned int>& asteroid_destruction)
 {
 	// Check empty string
 	if (buffer.empty()) {
-		return;
+		return 0;
 	}
 
 	// Check if wrong string was sent to this function
 	if (buffer[0] != 0x7) {
 		PrintString("Read_AsteroidCreations: Wrong Command ID sent to this function");
-		return;
+		return 0;
 	}
 
 	// Getting number of Collisions
 	uint16_t num_col = 0;
 	std::memcpy(&num_col, &buffer[1], 2);
 	num_col = ntohs(num_col);
+
+	int bytes_read = 3;
 
 	for (int i = 0; i < num_col; i++) {
 		int offset = 3 + i * 10;
@@ -549,17 +568,6 @@ void Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, 
 		std::memcpy(&obj_ID, &buffer[offset + 2], 4);
 		obj_ID = ntohl(obj_ID);
 
-		// Player
-		if (obj_ID == 0) {
-			// Player Response
-		}
-		// Bullet
-		else if (obj_ID > 0) {
-			// Bullet response ( Deleting from Map )
-			//players[Player_ID].score += amount;
-			int bulletID = obj_ID;
-			all_bullets[Player_ID].erase(bulletID);
-		}
 		// Asteroid
 		int Asteroid_ID;
 		std::memcpy(&Asteroid_ID, &buffer[offset + 6], 4);
@@ -567,7 +575,40 @@ void Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, 
 
 		// Asteroid Response ( Deleting from Map )
 		Asteroid_map.erase(Asteroid_ID);
+
+		// Player
+		if (obj_ID == 0) {
+			// Player Response
+
+			// Resetting player
+			players[Player_ID].Position_X = 0.f;
+			players[Player_ID].Position_Y = 0.f;
+			players[Player_ID].Velocity_X = 0.f;
+			players[Player_ID].Velocity_Y = 0.f;
+			players[Player_ID].Acceleration_X = 0.f;
+			players[Player_ID].Acceleration_Y = 0.f;
+
+			// Asteroid Response ( Deleting from Map )
+			Asteroid_map.erase(Asteroid_ID);
+			asteroid_destruction.push_back(Asteroid_ID);
+		}
+		// Bullet
+		else if (obj_ID > 0) {
+			// Bullet response ( Deleting from Map )
+			//players[Player_ID].score += amount;
+			int bulletID = obj_ID;
+			all_bullets[Player_ID].erase(bulletID);
+
+			// Asteroid Response ( Deleting from Map )
+			Asteroid_map.erase(Asteroid_ID);
+			bullet_destruction.push_back({ Player_ID, bulletID });
+			asteroid_destruction.push_back(Asteroid_ID);
+		}
+
+		bytes_read += 10;
 	}
+
+	return bytes_read;
 }
 
 /*

@@ -143,7 +143,9 @@ extern unsigned int bullet_ID; //start from 0
 // 
 extern std::map<unsigned int, Asteroids> Asteroid_map;
 extern std::vector<CollisionEvent> all_collisions;
-
+extern std::vector<std::pair<unsigned int, Asteroids>> new_asteroids;
+extern std::vector<std::pair<unsigned int, unsigned int>> bullet_destruction;
+extern std::vector<unsigned int> asteroid_destruction;
 
 std::string Write_PlayerTransform(Player player);
 int Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& player_map, std::vector<unsigned int>& players_to_create);
@@ -152,8 +154,8 @@ std::string Write_NewBullet(unsigned int session_ID,std::map<unsigned int, Bulle
 int Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>&, std::map<unsigned int, Player> player_map, std::vector<std::pair<unsigned int, unsigned int>>&);
 
 std::string Write_AsteroidCollision(unsigned int session_ID, std::vector<CollisionEvent>& all_collisions);
-void Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, Asteroids>& Asteroid_map);
-void Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>&, std::map<unsigned int, Asteroids>& Asteroid_map);
+int Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, Asteroids>& Asteroid_map, std::vector<std::pair<unsigned int, Asteroids>>& new_asteroids);
+int Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>&, std::map<unsigned int, Asteroids>& Asteroid_map, std::vector<std::pair<unsigned int, unsigned int>>& bullet_destruction, std::vector<unsigned int>& asteroid_destruction);
 //Thread-Safe printing of console message.
 void PrintString(const std::string& message);
 /*

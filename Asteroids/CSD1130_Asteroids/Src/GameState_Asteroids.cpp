@@ -160,6 +160,7 @@ GameObjInst* gameObjInstCreate(unsigned long type, AEVec2* scale,
 GameObjInst* gameObjInstCreate(int player_id, int object_id, unsigned long type,
 	AEVec2* scale, AEVec2* pPos, AEVec2* pVel, float dir);
 
+void DestroyInstanceByID(int objectID, unsigned long type, int player_ID);
 
 void				gameObjInstDestroy(GameObjInst* pInst);
 
@@ -182,7 +183,10 @@ unsigned int bullet_ID = 1;
 std::vector<unsigned int> new_players;
 std::vector<std::pair<unsigned int, unsigned int>> new_otherbullets; //list of bullets created by other players
 std::map<unsigned int, Asteroids> Asteroid_map;
+std::vector<std::pair<unsigned int, Asteroids>> new_asteroids;
 std::vector<CollisionEvent> all_collisions;
+std::vector<unsigned int> asteroid_destruction;
+std::vector<std::pair<unsigned int, unsigned int>> bullet_destruction;
 
 float get_TimeStamp() {
 	auto now = std::chrono::steady_clock::now();
@@ -821,8 +825,32 @@ void GameStateAsteroidsUpdate(void)
 		if ((pInst->flag & FLAG_ACTIVE) == 0)
 			continue;
 		
-		if (pInst->pObject->type != TYPE_BULLET) continue; //we are updating bullets only
-		if (pInst->pObject->type == TYPE_BULLET)
+		if (pInst->pObject->type == TYPE_ASTEROID) {
+			auto it = Asteroid_map.find(pInst->Object_ID);
+
+			if (it != Asteroid_map.end()) {
+
+				// Get the asteroid obj inst
+				auto astObj = it->second;
+
+				// Position
+				astObj.Position_x = pInst->posCurr.x;
+				astObj.Position_y = pInst->posCurr.y;
+
+				// Velocity
+				astObj.Velocity_x = pInst->velCurr.x;
+				astObj.Velocity_y = pInst->velCurr.y;
+
+				// Scale ( Added in case, tho it shouldn't change )
+				astObj.Scale_x = pInst->scale.x;
+				astObj.Scale_y = pInst->scale.y;
+
+				// Rotation
+				astObj.Rotation = pInst->dirCurr;
+			}
+		}
+
+		else if (pInst->pObject->type == TYPE_BULLET)
 		{
 			//update all bullet map
 			auto it = all_bullets.find(pInst->Player_ID);
@@ -858,7 +886,7 @@ void GameStateAsteroidsUpdate(void)
 			}
 
 		}
-
+		else continue; //we are updating bullets & asteroids only
 	}
 
 
@@ -885,7 +913,9 @@ void GameStateAsteroidsUpdate(void)
 			message_to_SERVER += Write_NewBullet(this_player.player_ID, new_bullets);
 		}
 
-		
+		if (all_collisions.size()) {
+			message_to_SERVER += Write_AsteroidCollision(this_player.player_ID, all_collisions);
+		}
 
 		//std::cout << message_to_SERVER.c_str();
 
@@ -950,7 +980,7 @@ void GameStateAsteroidsUpdate(void)
 
 
 			}
-			else if (Command_ID == 0x5) { //server_bullet_transform
+			else if (Command_ID == SERVER_BULLET_CREATION) { //server_bullet_transform
 				if (bytes_read >= buffer.size()) break; //No more things to read.
 				std::string result = buffer.substr(bytes_read); // Starts at index 1 and goes to the end
 				// test if msg is empty
@@ -984,17 +1014,48 @@ void GameStateAsteroidsUpdate(void)
 				}
 
 			}
+			else if (Command_ID == SERVER_ASTEROID_CREATION) {
+				if (bytes_read >= buffer.size()) break; //No more things to read.
+				std::string result = buffer.substr(bytes_read);
+				bytes_read += Read_AsteroidCreations(result, Asteroid_map, new_asteroids);
 
+				for (std::pair<unsigned int, Asteroids> Asteroided : new_asteroids) {
 
+					//check whether the Asteroid exisits in the all Asteroid map or not
+					auto it = Asteroid_map.find(Asteroided.first);
+
+					if (it != Asteroid_map.end()) {
+						// Set variables
+						auto temp = it->second;
+
+						AEVec2	sca = { temp.Scale_x, temp.Scale_y },
+							pos = { temp.Position_x, temp.Position_y },
+							vel = { temp.Velocity_x, temp.Velocity_y };
+
+						gameObjInstCreate(this_player.player_ID, Asteroided.first, TYPE_ASTEROID, &sca, &pos, &vel, 0.0f);
+						sGameObjInstNum++;
+					}
+				}
+			}
+			else if (Command_ID == SERVER_COLLISION) {
+				if (bytes_read >= buffer.size()) break; //No more things to read.
+				std::string result = buffer.substr(bytes_read);
+				bytes_read += Read_AsteroidDestruction(result, all_bullets, Asteroid_map, bullet_destruction, asteroid_destruction);
+
+				for (unsigned int Asteroid_ID : asteroid_destruction) {
+					DestroyInstanceByID(Asteroid_ID, TYPE_ASTEROID, this_player.player_ID);
+					onValueChange = true;
+				}
+
+				for (std::pair<unsigned int, unsigned int>& obj_ID : bullet_destruction) {
+					DestroyInstanceByID(obj_ID.second, TYPE_BULLET, obj_ID.first);
+					onValueChange = true;
+				}
+			}
 		}
 
 	}
 	
-
-
-	
-
-
 	/////////////////////////////////////////////////////////
 	// RESPONSES                                           //
 	/////////////////////////////////////////////////////////
@@ -1091,6 +1152,9 @@ void GameStateAsteroidsUpdate(void)
 	////clear the map for new studd since we already create and update the values already
 	new_otherbullets.clear();
 	new_players.clear();
+	new_asteroids.clear();
+	asteroid_destruction.clear();
+	bullet_destruction.clear();
 
 
 	// =====================================================================
@@ -1326,7 +1390,36 @@ void gameObjInstDestroy(GameObjInst* pInst)
 	pInst->flag = 0;
 }
 
+void DestroyInstanceByID(int objectID, unsigned long type, int player_ID)
+{
+	for (unsigned long i = 0; i < GAME_OBJ_INST_NUM_MAX; ++i)
+	{
+		GameObjInst* pInst = &sGameObjInstList[i];
 
+		if ((pInst->flag & FLAG_ACTIVE) == 0)
+			continue;
+		if (type == TYPE_ASTEROID) {
+			if (pInst->pObject->type == type && pInst->Object_ID == objectID)
+			{
+
+				gameObjInstDestroy(pInst);
+				sGameObjInstNum--;
+				return;
+			}
+		}
+		else if (type == TYPE_BULLET) {
+			if (pInst->pObject->type == type && pInst->Object_ID == objectID && pInst->Player_ID == player_ID)
+			{
+
+				gameObjInstDestroy(pInst);
+				sGameObjInstNum--;
+				return;
+			}
+		}
+	}
+
+	std::cerr << "Warning: Object of type " << type << " with ID " << objectID << " not found.\n";
+}
 
 
 /******************************************************************************/
