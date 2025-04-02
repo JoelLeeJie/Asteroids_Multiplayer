@@ -546,6 +546,44 @@ void GameStateAsteroidsUpdate(void)
 	AEVec2 addedAccel{};
 
 	if (sShipLives < 0 || sScore >= 5000) runGame = false;
+
+	//For debug purposes only.
+#ifdef _DEBUG
+	if (AEInputCheckTriggered(AEVK_0) && runGame == true)
+	{
+		std::lock_guard<std::mutex> player_lock{ this_player_lock };
+		std::string firefly_description =
+			"Firefly is a young woman with long, silvery-blonde hair with a teal ombre that reaches her waist, very fair skin, and eyes that are a mix of deep ocean blue and sunset pink.\n\n"
+			"She wears a brown blazer over a green and white dress with a yellow bow tied in the front. Her sleeves are detached and about wrist length, held with black bracelets — right side with a white flower decoration while the left is plain. She also wears a brown headband with a black bow on the left side of her head that she tore from a flag on the battlefield, along with two green feathers. On her legs she wears thigh-high stockings that fade from teal to a dark brown from top to bottom. The tops of the stockings are lined with gold, and her footwear consists of black heels with a base of white, as well as a pair of green gems in the center along with teal, ruffled collars that wrap around her ankles.\n\n"
+			"A member of the Stellaron Hunters, clad in a set of mechanized armor known as \"SAM.\" Her character is marked by unwavering loyalty and steely resolve.\n"
+			"Engineered as a weapon against the Swarm, she experiences accelerated growth, but a tragically shortened lifespan.\n"
+			"She joined the Stellaron Hunters in a quest for a chance at \"life,\" seeking to defy her fated demise.\n\n"
+			"Within the transparent incubation pod, she lay submerged in frigid artificial amniotic fluid, enclosed in a pristine white egg.\n"
+			"As the container trembled, she floated, and instinctively reached the cold and soft edges. She presses against the pod's walls tightly, curled up in a corner, as if that would make her body feel warmer.\n\n"
+			"She heard something heavy fall and the clamor of metal clashing. Intermittent haste-filled footsteps resounded, and the incubator started to shake...\n"
+			"\"Warriors, it is time to awaken...\"\n"
+			"\"For Her Majesty...\"\n"
+			"A pair of mechanical hands scooped her up as blinding light rent the world asunder. She forgot to weep.\n"
+			"\"Feel glory in your birth...\"\n"
+			"\"For Her Majesty...\"\n"
+			"She opened her eyes, yet failed to find the speaker.\n"
+			"She rose up and advanced through heavy curtains, venturing deeper into the palace.\n"
+			"\"Accept your honor, and your destiny...\"\n"
+			"\"For Her Majesty...\"\n"
+			"The cadence of footsteps in unison reverberated through the desolate palace.\n\n"
+			"She traversed the unattended vast garden, navigating through colossal insectoid carcasses and numerous incubators... until finally, she arrived at the resplendent council chamber, where a woman with a blurry face was seated upon the throne, her hands hanging wearily.\n\n"
+			"\"Don't look up.\"\n"
+			"Someone approached her, whispering softly. The person bore an identification tag, AR-26702. What does that signify?\n"
+			"She glanced at herself, AR-26710.\n\n"
+			"\"Come closer... my child...\"\n"
+			"A distant voice emanated from the depths of her mind, casting an inexplicable frenzy upon her consciousness.\n"
+			"She obediently approached the Empress and knelt down, kissing her fingertips.\n\n"
+			"The Empress's touch felt as icy and unyielding as solid ice, momentarily stirring a flicker of perplexity amidst her frenzy.\n"
+			"\"Ignite yourself to the last moment, for the future of Glamoth...\"";
+		this_player.SendLongMessage(firefly_description);
+	}
+#endif
+
 	if (AEInputCheckCurr(AEVK_UP) && runGame == true)
 	{
 		//Normalized forwards direction.
