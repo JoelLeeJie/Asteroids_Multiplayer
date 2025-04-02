@@ -51,14 +51,14 @@ prior written consent of DigiPen Institute of Technology is prohibited.
 #include <filesystem>
 #include "taskqueue.h"	
 
-#include "Utility.hpp"
-#include "Checksum.hpp"
+#include "../Utility.hpp"
+#include "../Checksum.hpp"
 #include <filesystem> //For file operations.
 #include <chrono> //for timeout timer.
 #include <thread> //to create a separate thread for file downloader.
 #include <fstream>
 
-
+// -------------------------------------------------Global definitions--------------------------------------------------
 /*
 	Represents a player session, where communications with the player is controlled through this.
 	Each player has their own session (and only one session).
@@ -141,17 +141,67 @@ struct Packet
 	int seq_or_ack_number{}; //Either sequence number or ACK.
 };
 
-//Time before server stops waiting for player response, and disconnects them.
-constexpr float AUTOMATIC_DISCONNECTION_TIMER = 4.f;
+/*
+	Bullet Struct to store info abt the new created bullet
+*/
+struct Bullet {
 
-//Used to manage interactions with players, including sending/receiving, automatic disconnection, reliable data transfer.
-std::map<int, Player_Session> player_Session_Map{};
+	int objectID;
+	float posX;
+	float posY;
+	float velocityX;
+	float velocityY;
+	float rotation;
+	float timeStamp;
+};
+
+/*
+	Asteroid struct to temporaily store asteroids which will then be passed to client side
+*/
+struct Asteroids {
+
+	unsigned int id;
+	float Position_x;
+	float Position_y;
+	float Velocity_x;
+	float Velocity_y;
+	float Scale_x;
+	float Scale_y;
+	float Rotation;
+
+	float time_of_creation;
+};//add new asteroid to the map 
+
+
+/*
+	Simple PLayer struct to store player info to be used for asteroid checking
+*/
+struct Player {
+
+	float Position_x;
+	float Position_y;
+
+};//add new asteroid to the map 
+
+// Constants
+constexpr float AUTOMATIC_DISCONNECTION_TIMER = 4.f; // Time before server stops waiting for player response, and disconnects them.
+const float			ASTEROID_MIN_SCALE_X = 10.0f;		// asteroid minimum scale x
+const float			ASTEROID_MAX_SCALE_X = 60.0f;		// asteroid maximum scale x
+const float			ASTEROID_MIN_SCALE_Y = 10.0f;		// asteroid minimum scale y
+const float			ASTEROID_MAX_SCALE_Y = 60.0f;		// asteroid maximum scale y
+
+// Containers
+std::map<int, Player_Session> player_Session_Map{}; // Used to manage interactions with players, including sending/receiving, automatic disconnection, reliable data transfer.
 std::mutex session_map_lock{};
+std::array<unsigned char, 4> server_ip_addr{}; // Server information, set and forget in main().
+std::map<unsigned short, std::vector<Bullet>> bulletMap; // map to store bullet, asteroid and player info
+std::queue<Asteroids> newAsteroidQueue;
+std::vector<Player> currentPlayers;
+std::queue<Packet> packet_recv_queue{}; // For temporarily storing packets received.
 
-//Server information, set and forget in main().
-std::array<unsigned char, 4> server_ip_addr{};
+// Global vars
 int server_tcp_port_number{}, server_udp_port_number{};
-
+static unsigned int asteroidCount = 0;
 //Controls what the next player's ID should be, to prevent players from having the same ID.
 //Reconnecting players will reconnect via sending the player_ID, letting the server know which session to reassume.
 int player_id = 0;
@@ -159,18 +209,15 @@ int player_id = 0;
 //For any sending/receiving, set at the start.
 SOCKET udp_socket{};
 std::mutex socket_lock{};
-
-//For temporarily storing packets received.
-std::queue<Packet> packet_recv_queue{};
 std::mutex packet_queue_lock{};
 
 //Indicates if the game has ended, so0 the multi-threaded functions can end too.
 bool isGameRunning{ true };
 
-//Forward declarations:
+//nForward declarations:
 //void HandleStartGame();
 
-
+// ------------------------------------------------Entry Point--------------------------------------------------------
 /*
 	\brief
 	The starting point where server-player interactions are managed.
@@ -813,6 +860,155 @@ int main(int argc, char* argv[])
 }
 
 
+/******************************************************************************/
+/*!
+\brief
+Reads bullet spawn message from the client and store them in the map to write
+back to the players
+format: everything after command id
+[2 bytes, number of bullets][4bytes, int Object ID][4 bytes, float X position]
+[4 bytes, float Y position][8 bytes, vec2 velocity][4 bytes, float rotation]
+[4 bytes, float timestamp]...
+*/
+/******************************************************************************/
+void ReadBullet(std::istream& input, unsigned short playerID)
+{
+	unsigned short numBullets = 0;
+	input.read(reinterpret_cast<char*>(&numBullets), sizeof(unsigned short));
+
+	for (int i = 0; i < numBullets; ++i)
+	{
+		int objectID;
+		float posX, posY;
+		float velX, velY;
+		float rotation;
+		float timestamp;
+
+		input.read(reinterpret_cast<char*>(&objectID), sizeof(int));
+		input.read(reinterpret_cast<char*>(&posX), sizeof(float));
+		input.read(reinterpret_cast<char*>(&posY), sizeof(float));
+		input.read(reinterpret_cast<char*>(&velX), sizeof(float));
+		input.read(reinterpret_cast<char*>(&velY), sizeof(float));
+		input.read(reinterpret_cast<char*>(&rotation), sizeof(float));
+		input.read(reinterpret_cast<char*>(&timestamp), sizeof(float));
+
+		Bullet newBullet = { objectID, posX, posY, velX, velY, rotation, timestamp };
+		bulletMap[playerID].push_back(newBullet);
+	}
+}
+
+/******************************************************************************/
+/*!
+\brief
+writes the bullet message back into the output stream
+format:
+[Player ID1][All the bullets of player 1][Player ID 2][All the bullets of player 2]...
+*/
+/******************************************************************************/
+void WriteBullet(std::ostream& output)
+{
+
+	for (const auto& [playerID, bullets] : bulletMap)
+	{
+		output.write(reinterpret_cast<const char*>(&playerID), sizeof(unsigned short));
+
+		unsigned short numBullets = static_cast<unsigned short>(bullets.size());
+		output.write(reinterpret_cast<const char*>(&numBullets), sizeof(unsigned short));
+
+		for (Bullet bullet : bullets)
+		{
+
+			output.write(reinterpret_cast<const char*>(&bullet.objectID), sizeof(int));
+			output.write(reinterpret_cast<const char*>(&bullet.posX), sizeof(float));
+			output.write(reinterpret_cast<const char*>(&bullet.posY), sizeof(float));
+			output.write(reinterpret_cast<const char*>(&bullet.velocityX), sizeof(float));
+			output.write(reinterpret_cast<const char*>(&bullet.velocityY), sizeof(float));
+			output.write(reinterpret_cast<const char*>(&bullet.rotation), sizeof(float));
+			output.write(reinterpret_cast<const char*>(&bullet.timeStamp), sizeof(float));
+		}
+	}
+
+	bulletMap.clear();
+}
+
+
+/******************************************************************************/
+/*!
+\brief
+Create asteriods and push them into the queue for writing later
+*/
+/******************************************************************************/
+void CreateNewAsteroid()
+{
+	//static lambda to only run once.
+	static auto once = []() {
+		srand((unsigned int)GetTime());
+		};
+
+	float posX;
+	float posY;
+	float velX;
+	float velY;
+	float scaleX;
+	float scaleY;
+
+	//Set it so that it doesn't spawn on the player.
+	for (Player player : currentPlayers) {
+		do
+		{
+			// ndc coordinates, to be converted to scale in client side
+			posX = (static_cast<float>(rand()) / RAND_MAX) * 2.0f - 1.0f;
+			posY = (static_cast<float>(rand()) / RAND_MAX) * 2.0f - 1.0f;
+
+		} while (posX < player.Position_x + 200 && posX > player.Position_x - 200
+			|| posY < player.Position_y + 200 && posY > player.Position_y - 200);
+	}
+	
+
+	velX = (float)(rand() % 200) - 100.f;
+	velY = (float)(rand() % 200) - 100.f;
+
+	scaleX = (float)(rand() % (int)(ASTEROID_MAX_SCALE_X - ASTEROID_MIN_SCALE_X) + ASTEROID_MIN_SCALE_X);
+	scaleY = (float)(rand() % (int)(ASTEROID_MAX_SCALE_Y - ASTEROID_MIN_SCALE_Y) + ASTEROID_MIN_SCALE_Y);
+
+	Asteroids asteroid{ asteroidCount++, posX, posY, velX, velY, scaleX, scaleY, 0.0f, static_cast<float>(GetTime()) };
+
+	if (asteroidCount >= 1000) {
+		asteroidCount = 0;
+	}
+
+	newAsteroidQueue.push(asteroid);
+}
+
+
+/******************************************************************************/
+/*!
+\brief
+Create asteriods and push them into the queue for writing later
+*/
+/******************************************************************************/
+void WriteNewAsteroids(std::ostream& output)
+{
+	output.write(reinterpret_cast<const char*>(SERVER_ASTEROID_CREATION), sizeof(char));
+	unsigned short numAsteroids = static_cast<unsigned short>(newAsteroidQueue.size());
+	output.write(reinterpret_cast<const char*>(&numAsteroids), sizeof(unsigned short));
+
+	while (!newAsteroidQueue.empty())
+	{
+		Asteroids asteroid = newAsteroidQueue.front();
+		newAsteroidQueue.pop();
+
+		output.write(reinterpret_cast<const char*>(&asteroid.id), sizeof(int));
+		output.write(reinterpret_cast<const char*>(&asteroid.Position_x), sizeof(float));
+		output.write(reinterpret_cast<const char*>(&asteroid.Position_y), sizeof(float));
+		output.write(reinterpret_cast<const char*>(&asteroid.Velocity_x), sizeof(float));
+		output.write(reinterpret_cast<const char*>(&asteroid.Velocity_y), sizeof(float));
+		output.write(reinterpret_cast<const char*>(&asteroid.Rotation), sizeof(float));
+		output.write(reinterpret_cast<const char*>(&asteroid.Scale_x), sizeof(float));
+		output.write(reinterpret_cast<const char*>(&asteroid.Scale_y), sizeof(float));
+		output.write(reinterpret_cast<const char*>(&asteroid.time_of_creation), sizeof(float));
+	}
+}
 
 
 
