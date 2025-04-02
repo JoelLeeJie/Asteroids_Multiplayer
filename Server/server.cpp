@@ -189,6 +189,7 @@ const float			ASTEROID_MIN_SCALE_X = 10.0f;		// asteroid minimum scale x
 const float			ASTEROID_MAX_SCALE_X = 60.0f;		// asteroid maximum scale x
 const float			ASTEROID_MIN_SCALE_Y = 10.0f;		// asteroid minimum scale y
 const float			ASTEROID_MAX_SCALE_Y = 60.0f;		// asteroid maximum scale y
+const float			COLLISION_RADIUS_NDC = 0.2f;		// asteroid maximum scale y
 
 // Containers
 std::map<int, Player_Session> player_Session_Map{}; // Used to manage interactions with players, including sending/receiving, automatic disconnection, reliable data transfer.
@@ -915,9 +916,8 @@ void WriteBullet(std::ostream& output)
 		unsigned short numBullets = static_cast<unsigned short>(bullets.size());
 		output.write(reinterpret_cast<const char*>(&numBullets), sizeof(unsigned short));
 
-		for (Bullet bullet : bullets)
+		for (const Bullet& bullet : bullets)
 		{
-
 			output.write(reinterpret_cast<const char*>(&bullet.objectID), sizeof(int));
 			output.write(reinterpret_cast<const char*>(&bullet.posX), sizeof(float));
 			output.write(reinterpret_cast<const char*>(&bullet.posY), sizeof(float));
@@ -945,6 +945,16 @@ void CreateNewAsteroid()
 		srand((unsigned int)GetTime());
 		};
 
+	auto playerCollision = [&](float x, float y) {
+		for (const auto& player : currentPlayers) {
+			if (x > player.Position_x - COLLISION_RADIUS_NDC && x < player.Position_x + COLLISION_RADIUS_NDC &&
+				y > player.Position_y - COLLISION_RADIUS_NDC && y < player.Position_y + COLLISION_RADIUS_NDC) {
+				return true;
+			}
+		}
+		return false;
+		};
+
 	float posX;
 	float posY;
 	float velX;
@@ -953,18 +963,15 @@ void CreateNewAsteroid()
 	float scaleY;
 
 	//Set it so that it doesn't spawn on the player.
-	for (Player player : currentPlayers) {
-		do
-		{
-			// ndc coordinates, to be converted to scale in client side
-			posX = (static_cast<float>(rand()) / RAND_MAX) * 2.0f - 1.0f;
-			posY = (static_cast<float>(rand()) / RAND_MAX) * 2.0f - 1.0f;
 
-		} while (posX < player.Position_x + 200 && posX > player.Position_x - 200
-			|| posY < player.Position_y + 200 && posY > player.Position_y - 200);
-	}
+	do
+	{
+		// ndc coordinates, to be converted to scale in client side
+		posX = (static_cast<float>(rand()) / RAND_MAX) * 2.0f - 1.0f;
+		posY = (static_cast<float>(rand()) / RAND_MAX) * 2.0f - 1.0f;
+
+	} while (playerCollision(posX, posY));
 	
-
 	velX = (float)(rand() % 200) - 100.f;
 	velY = (float)(rand() % 200) - 100.f;
 
