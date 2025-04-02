@@ -234,7 +234,6 @@ std::map<unsigned int, PlayerTransform> playerTransforms;
 std::map<unsigned int, AsteroidCollision> asteroidCollisions;
 
 //Forward declarations:
-//void HandleStartGame();
 void ReadPlayerTransforms(std::istream& input, unsigned short playerID);
 void WritePlayerTransforms(std::ostream& output);
 void ReadAsteroidCollisions(std::istream& input, unsigned short playerID);
@@ -291,8 +290,11 @@ void GameProgram()
 			- Asteroid destruction (who destroyed what).
 		*/
 		//==Ensure all messages received and ACK'd.
-		//ReceiveAllMessages();
+		
 
+		/*
+			Spawning of Asteroids, 3 every 2s.
+		*/
 		auto now = Clock::now();
 		auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastAsteroidSpawn);
 
@@ -302,9 +304,27 @@ void GameProgram()
 			lastAsteroidSpawn = now;
 		}
 
+		bool hasReceivedAllMessage = true;
+		// Waits until it receives all messages from clients
+		{
+			std::lock_guard<std::mutex> map_lock{ session_map_lock };
+			for (auto& player_pair : player_Session_Map)
+			{
+				//If any player has an incomplete message, or an empty buffer, it means not all client messages have been received.
+				if (!player_pair.second.is_recv_message_complete) {
+					hasReceivedAllMessage = false;
+					break;
+				}
+				if (player_pair.second.recv_buffer.empty()) {
+					hasReceivedAllMessage = false;
+					break;
+				}
+			}
+		}
 		
+		//Wait to receive all messages.
+		if (!hasReceivedAllMessage) continue;
 
-		// Receive message from clients
 		{
 			std::lock_guard<std::mutex> map_lock{ session_map_lock };
 			for (auto& player_pair : player_Session_Map) {
@@ -330,7 +350,7 @@ void GameProgram()
 			}
 		}
 
-		// Send Message to client 
+		// Send Message to all clients 
 		{
 			std::ostringstream messageStream(std::ios::binary);
 
@@ -347,7 +367,22 @@ void GameProgram()
 				session.SendLongMessage(message);  // queues packet for reliable sending
 			}
 		}
+		//ReceiveAllMessages();
+		std::lock_guard<std::mutex> map_lock{ session_map_lock };
+		for (auto& [playerID, session] : player_Session_Map) {
+			std::ostringstream output;
 
+			// Write player transforms
+			output.put(SERVER_PLAYER_TRANSFORM);
+			WritePlayerTransforms(output);
+
+			// Write asteroid collisions
+			output.put(SERVER_COLLISION);
+			WriteAsteroidCollision(output);
+
+			// Send the combined message
+			session.SendLongMessage(output.str());
+		}
 	}
 }
 
