@@ -962,6 +962,10 @@ void WriteBullet(std::ostream& output)
 /*!
 \brief
 Create asteriods and push them into the queue for writing later
+format:
+[0x6][2 bytes, number of asteroids][4bytes Asteroid ID][8bytes vec2 pos]
+[8 bytes vec2 velocity][4 bytes float rotation][8 bytes vec2 scale]
+[4 bytes, float timestamp][4 bytes Asteroid ID2...]
 */
 /******************************************************************************/
 void CreateNewAsteroid()
@@ -1017,7 +1021,7 @@ void CreateNewAsteroid()
 /******************************************************************************/
 /*!
 \brief
-Create asteriods and push them into the queue for writing later
+Write the asteroids into the output buffer
 */
 /******************************************************************************/
 void WriteNewAsteroids(std::ostream& output)
