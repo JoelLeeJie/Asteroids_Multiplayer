@@ -146,15 +146,16 @@ extern unsigned int bullet_ID; //start from 0
 
 
 std::string Write_PlayerTransform(Player player);
-void Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& player_map, std::vector<unsigned int>& players_to_create);
+int Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& player_map, std::vector<unsigned int>& players_to_create);
 
 std::string Write_NewBullet(unsigned int session_ID,std::map<unsigned int, Bullet>& new_bullets);
-void Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>&, std::map<unsigned int, Player> player_map, std::vector<std::pair<unsigned int, unsigned int>>&);
+int Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>&, std::map<unsigned int, Player> player_map, std::vector<std::pair<unsigned int, unsigned int>>&);
 
 std::string Write_AsteroidCollision(unsigned int session_ID, std::vector<CollisionEvent>& all_collisions);
 void Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, Asteroids>& Asteroid_map);
 void Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>&, std::map<unsigned int, Asteroids>& Asteroid_map);
-
+//Thread-Safe printing of console message.
+void PrintString(const std::string& message);
 /*
 	UDP functions
 */

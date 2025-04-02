@@ -51,8 +51,7 @@ prior written consent of DigiPen Institute of Technology is prohibited.
 #include <filesystem>
 #include "taskqueue.h"	
 
-#include "../Utility.hpp"
-#include "../Checksum.hpp"
+#include "..\Utility.hpp"
 #include <filesystem> //For file operations.
 #include <chrono> //for timeout timer.
 #include <thread> //to create a separate thread for file downloader.
@@ -219,6 +218,18 @@ bool isGameRunning{ true };
 //void HandleStartGame();
 
 // ------------------------------------------------Entry Point--------------------------------------------------------
+/*
+	Thread-safe atomic writing to console.
+*/
+void PrintString(const std::string& message_to_print)
+{
+#ifdef _DEBUG
+	static std::mutex console_mutex{};
+	std::lock_guard<std::mutex> console_lock{ console_mutex };
+	std::cout << message_to_print << std::endl;
+#endif
+}
+
 /*
 	\brief
 	The starting point where server-player interactions are managed.
@@ -434,8 +445,8 @@ void ReceiveSendMessages()
 				if (!session.reliable_transfer.toSend) continue;
 				//Below here, packet is to be sent.
 				std::string message_to_send = session.messages_to_send.front();
-				session.messages_to_send.pop();
-
+				//Don't pop unless ACK'd
+				
 				//Add sequence number to the send.
 				uint32_t network_sequence_number = htonl(session.reliable_transfer.current_sequence_number);
 				char number_buffer[4]{};
@@ -455,6 +466,8 @@ void ReceiveSendMessages()
 				session.reliable_transfer.time_last_packet_sent = GetTime();
 				session.reliable_transfer.toSend = false;
 				data_to_write.push_back({ session.addrDest, data });
+
+				PrintString("MESSAGE SENT, Seq Num: " + std::to_string(session.reliable_transfer.current_sequence_number) + " Data: " + data);
 			}
 		}
 		{
@@ -546,6 +559,7 @@ void HandleReceivedPackets()
 			//Find the player in the map.
 			std::lock_guard<std::mutex> map_lock{ session_map_lock };
 			auto iter = player_Session_Map.find((int)player_id);
+			PrintString(std::string("ACK RECV, Seq Num: ") + std::to_string(packet.seq_or_ack_number) + " Player ID: " + std::to_string(player_id));
 
 			//Can't be found in map, so ignore the packet.
 			if (iter == player_Session_Map.end()) continue;
@@ -646,6 +660,7 @@ void HandleReceivedPackets()
 				{
 					session.reliable_transfer.ack_last_packet_received = packet.seq_or_ack_number;
 				}
+				PrintString("JOIN_REQUEST RECV, Seq Num: " + std::to_string(packet.seq_or_ack_number) + " Player ID: " + std::to_string(client_player_id));
 			}
 			//Send back JOIN response to sender.
 			{
@@ -716,6 +731,8 @@ void HandleReceivedPackets()
 			session.recv_buffer.insert(session.recv_buffer.end(), packet.data.begin()+3, packet.data.end());
 			if (command_ID == COMMAND_COMPLETE) session.is_recv_message_complete = true;
 			else session.is_recv_message_complete = false; //Still need to wait for more packets.
+
+			PrintString("MESSAGE RECV, Seq Num: " + std::to_string(packet.seq_or_ack_number) + " Data: " + packet.data);
 		}
 	}
 }
@@ -823,6 +840,15 @@ int main(int argc, char* argv[])
 	u_long enable = 1;
 	ioctlsocket(udp_socket, FIONBIO, &enable);
 
+
+	/* PRINT SERVER IP ADDRESS AND PORT NUMBER */
+	char serverIPAddr[1000];
+	struct sockaddr_in* serverAddress = reinterpret_cast<struct sockaddr_in*> (info_udp->ai_addr);
+	inet_ntop(AF_INET, &(serverAddress->sin_addr), serverIPAddr, INET_ADDRSTRLEN);
+	getnameinfo(info_udp->ai_addr, static_cast <socklen_t> (info_udp->ai_addrlen), serverIPAddr, sizeof(serverIPAddr), nullptr, 0, NI_NUMERICHOST);
+	std::cerr << std::endl;
+	std::cerr << "Server IP Address: " << serverIPAddr << std::endl;
+	std::cerr << "Server UDP Port Number: " << udp_port_string << std::endl;
 
 	/*
 		1st thread.
