@@ -44,6 +44,7 @@ public:
 				long_message = (char)(COMMAND_COMPLETE)+player_id_string +long_message;
 				//String length is less than or equal to max payload size, so just push it all as one packet.
 				messages_to_send.push(long_message);
+				reliable_transfer.toSend = true;
 				return; //All parts of the message have been sent.
 			}
 			else
@@ -138,23 +139,23 @@ extern std::vector<unsigned int> new_players;
 extern std::map<unsigned int, Bullet> new_bullets; //list of bullets created by player
 extern std::map<unsigned int, std::map<unsigned int, Bullet>> all_bullets; //all the bullets
 extern std::vector<std::pair<unsigned int, unsigned int>> new_otherbullets; //list of bullets created by other players
-
 extern unsigned int bullet_ID; //start from 0
 // 
-//std::map<unsigned int, Asteroids> Asteroid_map 
-//std::vector<CollisionEvent> all_collisions;
+extern std::map<unsigned int, Asteroids> Asteroid_map;
+extern std::vector<CollisionEvent> all_collisions;
 
 
 std::string Write_PlayerTransform(Player player);
-void Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& player_map, std::vector<unsigned int>& players_to_create);
+int Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& player_map, std::vector<unsigned int>& players_to_create);
 
 std::string Write_NewBullet(unsigned int session_ID,std::map<unsigned int, Bullet>& new_bullets);
-void Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>&, std::map<unsigned int, Player> player_map, std::vector<std::pair<unsigned int, unsigned int>>&);
+int Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>&, std::map<unsigned int, Player> player_map, std::vector<std::pair<unsigned int, unsigned int>>&);
 
 std::string Write_AsteroidCollision(unsigned int session_ID, std::vector<CollisionEvent>& all_collisions);
 void Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, Asteroids>& Asteroid_map);
 void Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>&, std::map<unsigned int, Asteroids>& Asteroid_map);
-
+//Thread-Safe printing of console message.
+void PrintString(const std::string& message);
 /*
 	UDP functions
 */

@@ -13,6 +13,19 @@ std::mutex this_player_lock{};
 SOCKET udp_socket;
 std::mutex socket_lock{};
 
+/*
+	Thread-safe atomic writing to console.
+*/
+void PrintString(const std::string& message_to_print)
+{
+#ifdef _DEBUG
+	static std::mutex console_mutex{};
+	std::lock_guard<std::mutex> console_lock{ console_mutex };
+	std::cout << message_to_print << std::endl;
+#endif
+}
+
+
 std::string Write_PlayerTransform(Player player) {
 
 	//uint16_t port_network_order = htons(port);
@@ -20,12 +33,11 @@ std::string Write_PlayerTransform(Player player) {
 
 	//rev: ntohl
 	//semd: ht
-
 	// Create a string with at least 4 bytes
-	uint32_t Xpos = 0, Ypos = 0;
-	uint32_t Xvel = 0, Yvel = 0;
-	uint32_t Xacc = 0, Yacc = 0;
-	uint32_t rot = 0;
+	uint32_t Xpos, Ypos;
+	uint32_t Xvel, Yvel;
+	uint32_t Xacc, Yacc;
+	uint32_t rot;
 
 	std::memcpy(&Xpos, &player.Position_X, 4);
 	std::memcpy(&Ypos, &player.Position_Y, 4);
@@ -37,17 +49,14 @@ std::string Write_PlayerTransform(Player player) {
 	std::memcpy(&Yacc, &player.Acceleration_Y, 4);
 
 	std::memcpy(&rot, &player.Rotation, 4);
-
-
+	
+	
 	Xpos = htonl(Xpos);
 	Ypos = htonl(Ypos);
-
 	Xvel = htonl(Xvel);
 	Yvel = htonl(Yvel);
-
 	Xacc = htonl(Xacc);
 	Yacc = htonl(Yacc);
-
 	rot = htonl(rot);
 
 	std::string result(29, '\0');
@@ -62,7 +71,47 @@ std::string Write_PlayerTransform(Player player) {
 	std::memcpy(&result[21], &Yacc, 4);
 	std::memcpy(&result[25], &rot, 4);
 
+
+	/*std::cout << "before: =============================\n";
+	std::cout << "POS: x: " << player.Position_X << " y: " << player.Position_Y << std::endl;
+	std::cout << "VEL: x: " << player.Velocity_X << " y: " << player.Velocity_Y << std::endl;
+	std::cout << "rotation: " << player.Rotation << std::endl;
+
+	std::memcpy(&Xpos, &result[1], 4);
+	std::memcpy(&Ypos, &result[5], 4);
+	std::memcpy(&Xvel, &result[9], 4);
+	std::memcpy(&Yvel, &result[13], 4);
+	std::memcpy(&Xacc, &result[17], 4);
+	std::memcpy(&Yacc, &result[21], 4);
+	std::memcpy(&rot, &result[25], 4);
+
+	Xpos = ntohl(Xpos);
+	Ypos = ntohl(Ypos);
+	Xvel = ntohl(Xvel);
+	Yvel = ntohl(Yvel);
+	Xacc = ntohl(Xacc);
+	Yacc = ntohl(Yacc);
+	rot = ntohl(rot);
+
+	float posX, posY, velX, velY, accX, accY, rot2;
+	std::memcpy(&posX, &Xpos, 4);
+	std::memcpy(&posY, &Ypos, 4);
+	std::memcpy(&velX, &Xvel, 4);
+	std::memcpy(&velY, &Yvel, 4);
+	std::memcpy(&accX, &Xacc, 4);
+	std::memcpy(&accY, &Yacc, 4);
+	std::memcpy(&rot2, &rot, 4);
+
+	std::cout << "after: =============================\n";
+	std::cout << "POS: x: " << posX << " y: " << posY << std::endl;
+	std::cout << "VEL: x: " << velX << " y: " << velY << std::endl;
+	std::cout << "rotation: " << rot2 << std::endl;*/
+
+
+
 	return result;
+
+	//return std::string("Hello ");
 
 	// To verify (optional): print each byte in hex
 	/*for (unsigned char c : Xpos) {
@@ -73,14 +122,16 @@ std::string Write_PlayerTransform(Player player) {
 
 }
 
-void Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& player_map, std::vector<unsigned int>& players_to_create) {
+int Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& player_map, std::vector<unsigned int>& players_to_create) {
 
 	if (buffer.empty()) {
 
-		std::cout << "Read_PlayersTransform: buffer is empty!\n";
+		PrintString("Read_PlayersTransform: buffer is empty!");
 
-		return;
+		return 0;
 	}
+
+	int bytes_read = 0;
 
 	char ID_Dump = buffer[0];
 
@@ -88,6 +139,8 @@ void Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& p
 	uint16_t num_players = 0;
 	std::memcpy(&num_players, &buffer[1], 2);
 	num_players = ntohs(num_players);
+
+	bytes_read = 3;
 
 	for (int i = 0; i < (int)num_players; i++) {
 
@@ -146,8 +199,13 @@ void Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& p
 
 		}
 
+		bytes_read += 30;
+
 
 	}
+	std::cout << "Read_PlayersTransform | bytes read: " << bytes_read << std::endl;
+
+	return bytes_read;
 
 }
 
@@ -207,27 +265,34 @@ std::string Write_NewBullet(unsigned int session_ID, std::map<unsigned int, Bull
 		std::memcpy(&result[offset + 20], &time_stamp, 4);
 		std::memcpy(&result[offset + 24], &bullet_id, 4);
 
+		
+
 		j++;
 
 
 	}
+
+	//std::cout << "new bullets size: " << new_bullets.size() << std::endl;
+
 	//after creating, remove the bullets to be created. to avoid duplication
 	new_bullets.clear();
 
 	return result;
-
+	//return std::string("World\n");
 }
 
 
 
-void Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>& bullets_map, std::map<unsigned int, Player> player_map, std::vector<std::pair<unsigned int, unsigned int>>& other_bullets) {
+int Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>& bullets_map, std::map<unsigned int, Player> player_map, std::vector<std::pair<unsigned int, unsigned int>>& other_bullets) {
 
 	if (buffer.empty()) {
 
-		std::cout << "Read_New_Bullets: buffer is empty!\n";
+		PrintString("Read_New_Bullets: buffer is empty!");
 
-		return;
+		return 0;
 	}
+
+	int bytes_read = 0;
 
 	char ID_Dump = buffer[0];
 
@@ -236,6 +301,8 @@ void Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsign
 	num_players = ntohs(num_players);
 
 	int offset = 3;
+
+	bytes_read = 3;
 
 
 	for (int i = 0; i < (int)num_players; i++) {
@@ -251,7 +318,7 @@ void Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsign
 		num_bullets = ntohs(num_bullets);
 
 		offset += 4; //if bullet num =1, offset here should be 7
-
+		bytes_read += 4;
 
 		for (int j = 0; j < (int)num_bullets; j++) {
 
@@ -269,6 +336,7 @@ void Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsign
 			std::memcpy(&time_stamp, &buffer[offset + 24], 4);
 
 			offset += 28;
+			bytes_read += 28;
 
 			Xpos = ntohl(Xpos);
 			Ypos = ntohl(Ypos);
@@ -297,7 +365,7 @@ void Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsign
 				if (it->second.find(static_cast<unsigned int>(bullet_id)) == it->second.end()) {
 
 					it->second[static_cast<unsigned int>(bullet_id)] = new_bullet;
-
+					other_bullets.push_back(std::pair<unsigned int, unsigned int>(player_ID, bullet_id));
 				}
 
 			}
@@ -330,6 +398,8 @@ void Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsign
 		}
 
 	}
+	std::cout << "Read_New_Bullets | bytes read: " << bytes_read << std::endl;
+	return bytes_read;
 
 }
 
@@ -354,6 +424,8 @@ void Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsign
 */
 std::string Write_AsteroidCollision(unsigned int session_ID, std::vector<CollisionEvent>& all_collisions)
 {
+	if (all_collisions.size() == 0) return "";
+
 	// Check number of collisions
 	uint16_t num_collides = all_collisions.size();
 	num_collides = htons(num_collides);
@@ -406,7 +478,7 @@ void Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, As
 
 	// Check if wrong string was sent to this function
 	if (buffer[0] != 0x6) {
-		std::cout << "Read_AsteroidCreations: Wrong Command ID sent to this function" << std::endl;
+		PrintString("Read_AsteroidCreations: Wrong Command ID sent to this function");
 		return;
 	}
 
@@ -456,7 +528,7 @@ void Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, 
 
 	// Check if wrong string was sent to this function
 	if (buffer[0] != 0x7) {
-		std::cout << "Read_AsteroidCreations: Wrong Command ID sent to this function" << std::endl;
+		PrintString("Read_AsteroidCreations: Wrong Command ID sent to this function");
 		return;
 	}
 
@@ -531,20 +603,21 @@ namespace
 
 int InitializeUDP()
 {
+	std::string temp{};
 	std::string server_ip{};
 	std::string server_udp_portString{}, client_udp_portString{};
 	std::ifstream config_file{ "Config.txt" };
+	if (!config_file.is_open())
+	{
+		PrintString("Config.txt not found: Put with executable.");
+		throw std::exception("Config.txt not found: Put with executable.");
+	}
 	// Get Server IP Address
-	std::cout << "Server IP Address: ";
-	std::getline(std::cin, server_ip);
-
-	std::cout << std::endl;
-
-	// Get Port Number
-	std::cout << "Server UDP Port Number: ";
-	std::getline(std::cin, server_udp_portString);
-	std::cout << "Client UDP Port Number: ";
-	std::getline(std::cin, client_udp_portString);
+	config_file >> temp >> server_ip >> std::ws;
+	//Get Server Port number
+	config_file >> temp >> server_udp_portString >> std::ws;
+	//Get Client Port number
+	config_file >> temp >> client_udp_portString >> std::ws;
 
 	// -------------------------------------------------------------------------
 	// Start up Winsock, asking for version 2.2.
@@ -678,6 +751,7 @@ void HandleReceivedPackets(std::string data, int seq_or_ack_number)
 
 	if (command_ID == ACK)
 	{
+		PrintString(std::string("ACK RECV, Seq Num: ") + std::to_string(seq_or_ack_number));
 		/*
 			Using ACK number, decide what to do with ACK.
 			If ACK == current sequence number, packet has been received successfully
@@ -724,6 +798,7 @@ void HandleReceivedPackets(std::string data, int seq_or_ack_number)
 		uint16_t id{};
 		memcpy_s(&id, 2, data.data() + 1, 2);
 		this_player.player_ID = ntohs(id);
+		PrintString("JOIN_RESPONSE RECV, Seq Num: " + std::to_string(seq_or_ack_number) + " Player ID: " + std::to_string(this_player.player_ID));
 
 		//Since "ACK" for the recently sent "JOIN_REQUEST" message is successful, then respond accordingly.
 		this_player.reliable_transfer.current_sequence_number++;
@@ -778,7 +853,7 @@ void HandleReceivedPackets(std::string data, int seq_or_ack_number)
 	{
 		//Message format: [General Command = COMMAND][Command ID]...[Command ID 2]
 		std::lock_guard<std::mutex> player_lock{ this_player_lock };
-		
+
 		//==Check if it's a new message, by comparing packet number with the last successful packet.
 		if (this_player.reliable_transfer.ack_last_packet_received >= seq_or_ack_number) return;
 		//it's a new packet, so update the stored ack number.
@@ -793,6 +868,8 @@ void HandleReceivedPackets(std::string data, int seq_or_ack_number)
 		this_player.recv_buffer.insert(this_player.recv_buffer.end(), data.begin() + 1, data.end());
 		if (command_ID == COMMAND_COMPLETE) this_player.is_recv_message_complete = true;
 		else this_player.is_recv_message_complete = false; //Still need to wait for more packets.
+
+		PrintString("MESSAGE RECV, Seq Num: " + std::to_string(seq_or_ack_number) + " Data: " + data);
 	}
 
 }
@@ -840,7 +917,7 @@ void ReceiveSendMessages()
 			if (!session.reliable_transfer.toSend) break;
 			//Below here, packet is to be sent.
 			std::string message_to_send = session.messages_to_send.front();
-			session.messages_to_send.pop();
+			//Don't pop, unless ACK'd.
 
 			//Add sequence number to the send.
 			uint32_t network_sequence_number = htonl(session.reliable_transfer.current_sequence_number);
@@ -861,6 +938,8 @@ void ReceiveSendMessages()
 			session.reliable_transfer.time_last_packet_sent = GetTime();
 			session.reliable_transfer.toSend = false;
 			data_to_write.push_back({ session.addrDest, data });
+
+			PrintString("MESSAGE SENT, Seq Num: " + std::to_string(session.reliable_transfer.current_sequence_number) + " Data: " + data);
 		}
 
 		{

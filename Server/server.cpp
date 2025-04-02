@@ -52,13 +52,12 @@ prior written consent of DigiPen Institute of Technology is prohibited.
 #include "taskqueue.h"	
 
 #include "..\Utility.hpp"
-#include "..\Checksum.hpp"
 #include <filesystem> //For file operations.
 #include <chrono> //for timeout timer.
 #include <thread> //to create a separate thread for file downloader.
 #include <fstream>
 
-
+// -------------------------------------------------Global definitions--------------------------------------------------
 /*
 	Represents a player session, where communications with the player is controlled through this.
 	Each player has their own session (and only one session).
@@ -73,7 +72,7 @@ public:
 		: addrDest{ addr }
 	{
 	}
-	
+
 	void SendLongMessage(const std::string& message)
 	{
 		if (message.empty()) return;
@@ -83,9 +82,10 @@ public:
 			//The last part of the message, add COMMAND_COMPLETE to indicate it is complete.
 			if (long_message.size() <= MAX_PAYLOAD_SIZE - 1)
 			{
-				long_message = (char)(COMMAND_COMPLETE) + long_message;
+				long_message = (char)(COMMAND_COMPLETE)+long_message;
 				//String length is less than or equal to max payload size, so just push it all as one packet.
 				messages_to_send.push(long_message);
+				reliable_transfer.toSend = true;
 				return; //All parts of the message have been sent.
 			}
 			else
@@ -97,7 +97,7 @@ public:
 				//Move to the next chunk of the message.
 				long_message = long_message.substr(MAX_PAYLOAD_SIZE);
 			}
-			
+
 		}
 	}
 	//Used to control reliable data transfer.
@@ -141,17 +141,68 @@ struct Packet
 	int seq_or_ack_number{}; //Either sequence number or ACK.
 };
 
-//Time before server stops waiting for player response, and disconnects them.
-constexpr float AUTOMATIC_DISCONNECTION_TIMER = 4.f;
+/*
+	Bullet Struct to store info abt the new created bullet
+*/
+struct Bullet {
 
-//Used to manage interactions with players, including sending/receiving, automatic disconnection, reliable data transfer.
-std::map<int, Player_Session> player_Session_Map{};
+	int objectID;
+	float posX;
+	float posY;
+	float velocityX;
+	float velocityY;
+	float rotation;
+	float timeStamp;
+};
+
+/*
+	Asteroid struct to temporaily store asteroids which will then be passed to client side
+*/
+struct Asteroids {
+
+	unsigned int id;
+	float Position_x;
+	float Position_y;
+	float Velocity_x;
+	float Velocity_y;
+	float Scale_x;
+	float Scale_y;
+	float Rotation;
+
+	float time_of_creation;
+};//add new asteroid to the map 
+
+
+/*
+	Simple PLayer struct to store player info to be used for asteroid checking
+*/
+struct Player {
+
+	float Position_x;
+	float Position_y;
+
+};//add new asteroid to the map 
+
+// Constants
+constexpr float AUTOMATIC_DISCONNECTION_TIMER = 4.f; // Time before server stops waiting for player response, and disconnects them.
+const float			ASTEROID_MIN_SCALE_X = 10.0f;		// asteroid minimum scale x
+const float			ASTEROID_MAX_SCALE_X = 60.0f;		// asteroid maximum scale x
+const float			ASTEROID_MIN_SCALE_Y = 10.0f;		// asteroid minimum scale y
+const float			ASTEROID_MAX_SCALE_Y = 60.0f;		// asteroid maximum scale y
+const float			COLLISION_RADIUS_NDC = 0.2f;		// asteroid maximum scale y
+
+// Containers
+std::map<int, Player_Session> player_Session_Map{}; // Used to manage interactions with players, including sending/receiving, automatic disconnection, reliable data transfer.
 std::mutex session_map_lock{};
+std::array<unsigned char, 4> server_ip_addr{}; // Server information, set and forget in main().
+std::map<unsigned short, std::vector<Bullet>> bulletMap; // map to store bullet, asteroid and player info
+std::queue<Asteroids> newAsteroidQueue;
+std::vector<Player> currentPlayers;
+std::queue<Packet> packet_recv_queue{}; // For temporarily storing packets received.
 
-//Server information, set and forget in main().
-std::array<unsigned char, 4> server_ip_addr{};
+// Global vars
 int server_tcp_port_number{}, server_udp_port_number{};
-
+static unsigned int asteroidCount = 0;
 //Controls what the next player's ID should be, to prevent players from having the same ID.
 //Reconnecting players will reconnect via sending the player_ID, letting the server know which session to reassume.
 int player_id = 0;
@@ -159,10 +210,8 @@ int player_id = 0;
 //For any sending/receiving, set at the start.
 SOCKET udp_socket{};
 std::mutex socket_lock{};
-
-//For temporarily storing packets received.
-std::queue<Packet> packet_recv_queue{};
 std::mutex packet_queue_lock{};
+
 
 //Indicates if the game has ended, so0 the multi-threaded functions can end too.
 bool isGameRunning{ true };
@@ -193,6 +242,24 @@ void ReadAsteroidCollisions(std::istream& input, unsigned short playerID);
 void WriteAsteroidCollision(std::ostream& output);
 
 
+void ReadBullet(std::istream& input, unsigned short playerID);
+void WriteBullet(std::ostream& output);
+void CreateNewAsteroid();
+void WriteNewAsteroids(std::ostream& output);
+void HandleStartGame();
+
+// ------------------------------------------------Entry Point--------------------------------------------------------
+/*
+	Thread-safe atomic writing to console.
+*/
+void PrintString(const std::string& message_to_print)
+{
+#ifdef _DEBUG
+	static std::mutex console_mutex{};
+	std::lock_guard<std::mutex> console_lock{ console_mutex };
+	std::cout << message_to_print << std::endl;
+#endif
+}
 
 /*
 	\brief
@@ -202,15 +269,21 @@ void WriteAsteroidCollision(std::ostream& output);
 */
 void GameProgram()
 {
+	
 	//Wait for players to join.
-	//HandleStartGame();
+	HandleStartGame();
+	PrintString("Game Started\n");
+	// to keep track of time for asteroid spawn
+	using Clock = std::chrono::steady_clock;
+	auto lastAsteroidSpawn = Clock::now();
 	while (isGameRunning)
 	{
+
 		/*
 			Structure of Program:
 			It first receives the message, and checks which client sent it (session ID).
 			It then waits for other clients, then after all clients are done it checks for a few things.
-			It stops waiting after a few seconds, and clients who haven’t responded back means they disconnected, so remove them from client list and don’t wait for them.
+			It stops waiting after a few seconds, and clients who havenï¿½t responded back means they disconnected, so remove them from client list and donï¿½t wait for them.
 			Check who collided with asteroid first, based on their sent timestamps.
 			Send message back to clients
 			- New player transforms (from other players).
@@ -238,78 +311,121 @@ void GameProgram()
 
 
 
+	//}
+//}
+
+		auto now = Clock::now();
+		auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastAsteroidSpawn);
+
+		if (elapsed.count() >= 2) {
+			for (int i = 0; i < 3; ++i)
+				CreateNewAsteroid();
+			lastAsteroidSpawn = now;
+		}
+
+		// Receive message from clients
+		{
+			std::lock_guard<std::mutex> map_lock{ session_map_lock };
+			for (auto& player_pair : player_Session_Map) {
+				if (!player_pair.second.is_recv_message_complete) {
+					continue;
+				}
+				char commandID;
+				std::stringstream msgStream(player_pair.second.recv_buffer);
+				msgStream.read(reinterpret_cast<char*>(&commandID), sizeof(char));
+				switch (commandID) {
+				case CLIENT_BULLET_CREATION:
+					ReadBullet(msgStream, player_pair.first);
+					break;
+				default:
+					break;
+				}
+				player_pair.second.recv_buffer.clear();
+				player_pair.second.is_recv_message_complete = false;
+			}
+		}
+
+		// Send Message to client 
+		{
+			std::ostringstream messageStream(std::ios::binary);
+
+			// Compose message content
+			WriteBullet(messageStream);
+			WriteNewAsteroids(messageStream);
+
+			std::string message = messageStream.str();
+
+			std::lock_guard<std::mutex> map_lock{ session_map_lock };
+			for (auto& [_, session] : player_Session_Map) {
+				session.SendLongMessage(message);  // queues packet for reliable sending
+			}
+		}
+
 	}
 }
 
-///*
-//	\brief
-//	Continually get join requests from players, adding them as new players to the map.
-//	This happens until the START command is given, which is then echoed to all players and then the game starts (the function returns).
-//*/
-//void HandleStartGame()
-//{
-//	char temp_buffer[MAX_BUFFER_SIZE]{};
-//	while (true)
-//	{
-//		memset(temp_buffer, 0, MAX_BUFFER_SIZE);
-//		//==Read any incoming message.
-//		sockaddr_storage sender_addr{}; //temporarily store sender's address.
-//		int size_sockaddr = sizeof(sender_addr);
-//		int bytes_read{};
-//		
-//		{
-//			std::lock_guard<std::mutex> socket_locker{socket_lock};
-//			bytes_read = recvfrom(udp_socket, temp_buffer, MAX_BUFFER_SIZE, 0, (sockaddr*)&sender_addr, &size_sockaddr);
-//		}
-//		 
-//		
-//		//Join request or Start request detected.
-//		//Both only has 1 byte.
-//		if (bytes_read == 1)
-//		{
-//			char command_ID = temp_buffer[0];
-//			//Player wants to join.
-//			if (command_ID == JOIN_REQUEST)
-//			{
-//				int client_player_id = -1; //-1 to indicate it doesn't have a player id yet.
-//				//Iterate over the map, to see if the player already is in the game (maybe they never received the JOIN_RESPONSE).
-//				for (auto& player_entry : player_Session_Map)
-//				{
-//					//Check if they're already in the map.
-//					if (!Compare_SockAddr(&sender_addr, &player_entry.second.addrDest)) continue;
-//					//They are already in the map.
-//					client_player_id = player_entry.first;
-//				}
-//
-//				//No player entry found for this ip address, so add in a new entry.
-//				if (client_player_id == -1)
-//				{
-//					client_player_id = player_id;
-//					/*
-//						Store new player information into the map.
-//					*/
-//					player_Session_Map.emplace(player_id++, Player_Session{ sender_addr });
-//				}
-//
-//				//Send the information back to the player as a JOIN_RESPONSE, [Checksum, 2][0x21][Player_ID, 2].
-//				uint16_t network_player_id = htons((uint16_t)client_player_id);
-//				char buffer[10]{};
-//				buffer[2] = JOIN_RESPONSE;
-//				memcpy_s(buffer+3, 2, &network_player_id, 2);
-//				uint16_t checksum = CalculateChecksum(3, buffer + 2);
-//				checksum = htons(checksum);
-//				memcpy_s(buffer, 2, &checksum, 2);
-//				std::lock_guard<std::mutex> socket_locker{socket_lock};
-//				WriteToSocket(udp_socket, sender_addr, buffer, 5);
-//			}
-//		}
-//
-//		/*
-//			TODO: Handle start request, ensuring that all players receive start command via ACK.
-//		*/
-//
-//	}
-//}
+/*
+	\brief
+	Continually get join requests from players, adding them as new players to the map.
+	This happens until the START command is given, which is then echoed to all players and then the game starts (the function returns).
+*/
+void HandleStartGame()
+{
+	bool isStartGame = false;
+	while (!isStartGame)
+	{
+		/*
+			Loops until a player sends a start command.
+			As the start command will be the first command of the game (besides JOIN_REQUEST/ACK),
+			just check for anything in the buffer and see if it's the start command.
+		*/
+		{
+			std::lock_guard<std::mutex> map_lock{ session_map_lock };
+			for (auto& session_pair : player_Session_Map)
+			{
+				auto& session = session_pair.second;
+				//check if the items in the buffer are readable and completed.
+				if (!session.is_recv_message_complete || session.recv_buffer.empty()) continue;
+				char command_ID = session.recv_buffer[0];
+				//See if the command received is a start command.
+				if (command_ID != START_GAME)
+				{
+					//There shouldn't be any command that is not start game, so this is jic.
+					session.recv_buffer.clear();
+					//Since buffer is cleared.
+					session.is_recv_message_complete = false;
+					continue;
+				}
+				/*
+					Start game command received from one player, so send to every player for them to start.
+					Clear all the recvbuffers as well.
+					Set isStart to true.
+				*/
+				isStartGame = true;
+				break;
+			}
+		}
+	}
+	/*
+		Start game command received from one player, so send to every player for them to start.
+		Clear all the recvbuffers as well.
+	*/
+	//Hardcoded way to wait for other packets to come in first, just in case multiple players press START at the same time, so all buffers can be properly cleared.
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	std::lock_guard<std::mutex> map_lock{ session_map_lock };
+	for (auto& session_pair : player_Session_Map)
+	{
+		auto& session = session_pair.second;
+		//Clear before moving to start of game, to ensure no additional START_GAME command is mistakenly read as a game command.
+		session.recv_buffer.clear();
+		//Since buffer is cleared.
+		session.is_recv_message_complete = false;
+
+		std::string start_game{ (char)START_GAME };
+		//Send back a start game command to all players using RDT.
+		session.SendLongMessage(start_game);
+	}
+}
 
 ///*
 //	\brief
@@ -522,7 +638,7 @@ void ReceiveSendMessages()
 				if (!session.reliable_transfer.toSend) continue;
 				//Below here, packet is to be sent.
 				std::string message_to_send = session.messages_to_send.front();
-				session.messages_to_send.pop();
+				//Don't pop unless ACK'd
 
 				//Add sequence number to the send.
 				uint32_t network_sequence_number = htonl(session.reliable_transfer.current_sequence_number);
@@ -543,6 +659,8 @@ void ReceiveSendMessages()
 				session.reliable_transfer.time_last_packet_sent = GetTime();
 				session.reliable_transfer.toSend = false;
 				data_to_write.push_back({ session.addrDest, data });
+
+				PrintString("MESSAGE SENT, Seq Num: " + std::to_string(session.reliable_transfer.current_sequence_number) + " Data: " + data);
 			}
 		}
 		{
@@ -634,6 +752,7 @@ void HandleReceivedPackets()
 			//Find the player in the map.
 			std::lock_guard<std::mutex> map_lock{ session_map_lock };
 			auto iter = player_Session_Map.find((int)player_id);
+			PrintString(std::string("ACK RECV, Seq Num: ") + std::to_string(packet.seq_or_ack_number) + " Player ID: " + std::to_string(player_id));
 
 			//Can't be found in map, so ignore the packet.
 			if (iter == player_Session_Map.end()) continue;
@@ -742,6 +861,7 @@ void HandleReceivedPackets()
 				{
 					session.reliable_transfer.ack_last_packet_received = packet.seq_or_ack_number;
 				}
+				PrintString("JOIN_REQUEST RECV, Seq Num: " + std::to_string(packet.seq_or_ack_number) + " Player ID: " + std::to_string(client_player_id));
 			}
 			//Send back JOIN response to sender.
 			{
@@ -809,9 +929,11 @@ void HandleReceivedPackets()
 				This is because both general command ID and player ID are no longer necessary (any message in the player recvbuffer is both a COMMAND and belongs to that player).
 				Doing this also helps to chain incomplete packets together.
 			*/
-			session.recv_buffer.insert(session.recv_buffer.end(), packet.data.begin()+3, packet.data.end());
+			session.recv_buffer.insert(session.recv_buffer.end(), packet.data.begin() + 3, packet.data.end());
 			if (command_ID == COMMAND_COMPLETE) session.is_recv_message_complete = true;
 			else session.is_recv_message_complete = false; //Still need to wait for more packets.
+
+			PrintString("MESSAGE RECV, Seq Num: " + std::to_string(packet.seq_or_ack_number) + " Data: " + packet.data);
 		}
 	}
 }
@@ -826,19 +948,17 @@ void HandleReceivedPackets()
 */
 int main(int argc, char* argv[])
 {
+	std::string temp;
 	std::string udp_port_string{};
-	if (argc < 2)
+	std::ifstream config_file{ "Config.txt" };
+	if (!config_file.is_open())
 	{
-		// Get Port Number
-		std::cout << "Server UDP Port Number: ";
-		std::getline(std::cin, udp_port_string);
+		PrintString("Unable to open Config.txt. Add to project directory and executable directory.");
+		return -1;
 	}
-	else
-	{
-		udp_port_string = argv[1];
-	}
+	config_file >> std::ws >> temp >> std::ws >> udp_port_string;
 	server_udp_port_number = std::stoi(udp_port_string);
-
+	config_file.close();
 	/*
 		1. Create a UDP socket with port number based on client input
 		2. Bind the UDP socket to the machine
@@ -924,6 +1044,14 @@ int main(int argc, char* argv[])
 	ioctlsocket(udp_socket, FIONBIO, &enable);
 
 
+	/* PRINT SERVER IP ADDRESS AND PORT NUMBER */
+	char serverIPAddr[1000];
+	struct sockaddr_in* serverAddress = reinterpret_cast<struct sockaddr_in*> (info_udp->ai_addr);
+	inet_ntop(AF_INET, &(serverAddress->sin_addr), serverIPAddr, INET_ADDRSTRLEN);
+	getnameinfo(info_udp->ai_addr, static_cast <socklen_t> (info_udp->ai_addrlen), serverIPAddr, sizeof(serverIPAddr), nullptr, 0, NI_NUMERICHOST);
+	std::cerr << "Server IP Address: " << serverIPAddr << std::endl;
+	std::cerr << "Server UDP Port Number: " << udp_port_string << std::endl;
+
 	/*
 		1st thread.
 		Will continually read messages from the udp socket, adding them to the packet queue for another function to handle.
@@ -961,6 +1089,170 @@ int main(int argc, char* argv[])
 }
 
 
+/******************************************************************************/
+/*!
+\brief
+Reads bullet spawn message from the client and store them in the map to write
+back to the players
+format: everything after command id
+[2 bytes, number of bullets][4bytes, int Object ID][4 bytes, float X position]
+[4 bytes, float Y position][8 bytes, vec2 velocity][4 bytes, float rotation]
+[4 bytes, float timestamp]...
+*/
+/******************************************************************************/
+void ReadBullet(std::istream& input, unsigned short playerID)
+{
+	unsigned short numBullets = 0;
+	input.read(reinterpret_cast<char*>(&numBullets), sizeof(unsigned short));
+
+	for (int i = 0; i < numBullets; ++i)
+	{
+		int objectID;
+		float posX, posY;
+		float velX, velY;
+		float rotation;
+		float timestamp;
+
+		input.read(reinterpret_cast<char*>(&objectID), sizeof(int));
+		input.read(reinterpret_cast<char*>(&posX), sizeof(float));
+		input.read(reinterpret_cast<char*>(&posY), sizeof(float));
+		input.read(reinterpret_cast<char*>(&velX), sizeof(float));
+		input.read(reinterpret_cast<char*>(&velY), sizeof(float));
+		input.read(reinterpret_cast<char*>(&rotation), sizeof(float));
+		input.read(reinterpret_cast<char*>(&timestamp), sizeof(float));
+
+		Bullet newBullet = { objectID, posX, posY, velX, velY, rotation, timestamp };
+		bulletMap[playerID].push_back(newBullet);
+	}
+}
+
+/******************************************************************************/
+/*!
+\brief
+writes the bullet message back into the output stream
+format:
+[Player ID1][All the bullets of player 1][Player ID 2][All the bullets of player 2]...
+*/
+/******************************************************************************/
+void WriteBullet(std::ostream& output)
+{
+	char commandID = SERVER_BULLET_CREATION;
+	output.write(reinterpret_cast<const char*>(&commandID), sizeof(char));
+
+	unsigned short numPlayers = static_cast<unsigned short>(currentPlayers.size());
+	output.write(reinterpret_cast<const char*>(&numPlayers), sizeof(unsigned short));
+
+	for (const auto& [playerID, bullets] : bulletMap)
+	{
+		output.write(reinterpret_cast<const char*>(&playerID), sizeof(unsigned short));
+		unsigned short numBullets = static_cast<unsigned short>(bullets.size());
+		output.write(reinterpret_cast<const char*>(&numBullets), sizeof(unsigned short));
+
+		for (const Bullet& bullet : bullets)
+		{
+			output.write(reinterpret_cast<const char*>(&bullet.objectID), sizeof(int));
+			output.write(reinterpret_cast<const char*>(&bullet.posX), sizeof(float));
+			output.write(reinterpret_cast<const char*>(&bullet.posY), sizeof(float));
+			output.write(reinterpret_cast<const char*>(&bullet.velocityX), sizeof(float));
+			output.write(reinterpret_cast<const char*>(&bullet.velocityY), sizeof(float));
+			output.write(reinterpret_cast<const char*>(&bullet.rotation), sizeof(float));
+			output.write(reinterpret_cast<const char*>(&bullet.timeStamp), sizeof(float));
+		}
+	}
+
+	bulletMap.clear();
+}
+
+
+/******************************************************************************/
+/*!
+\brief
+Create asteriods and push them into the queue for writing later
+format:
+[0x6][2 bytes, number of asteroids][4bytes Asteroid ID][8bytes vec2 pos]
+[8 bytes vec2 velocity][4 bytes float rotation][8 bytes vec2 scale]
+[4 bytes, float timestamp][4 bytes Asteroid ID2...]
+*/
+/******************************************************************************/
+void CreateNewAsteroid()
+{
+	//static lambda to only run once.
+	static auto once = []() {
+		srand((unsigned int)GetTime());
+		};
+
+	auto playerCollision = [&](float x, float y) {
+		for (const auto& player : currentPlayers) {
+			if (x > player.Position_x - COLLISION_RADIUS_NDC && x < player.Position_x + COLLISION_RADIUS_NDC &&
+				y > player.Position_y - COLLISION_RADIUS_NDC && y < player.Position_y + COLLISION_RADIUS_NDC) {
+				return true;
+			}
+		}
+		return false;
+		};
+
+	float posX;
+	float posY;
+	float velX;
+	float velY;
+	float scaleX;
+	float scaleY;
+
+	//Set it so that it doesn't spawn on the player.
+
+	do
+	{
+		// ndc coordinates, to be converted to scale in client side
+		posX = (static_cast<float>(rand()) / RAND_MAX) * 2.0f - 1.0f;
+		posY = (static_cast<float>(rand()) / RAND_MAX) * 2.0f - 1.0f;
+
+	} while (playerCollision(posX, posY));
+
+	velX = (float)(rand() % 200) - 100.f;
+	velY = (float)(rand() % 200) - 100.f;
+
+	scaleX = (float)(rand() % (int)(ASTEROID_MAX_SCALE_X - ASTEROID_MIN_SCALE_X) + ASTEROID_MIN_SCALE_X);
+	scaleY = (float)(rand() % (int)(ASTEROID_MAX_SCALE_Y - ASTEROID_MIN_SCALE_Y) + ASTEROID_MIN_SCALE_Y);
+
+	Asteroids asteroid{ asteroidCount++, posX, posY, velX, velY, scaleX, scaleY, 0.0f, static_cast<float>(GetTime()) };
+
+	if (asteroidCount >= 1000) {
+		asteroidCount = 0;
+	}
+
+	newAsteroidQueue.push(asteroid);
+}
+
+
+/******************************************************************************/
+/*!
+\brief
+Write the asteroids into the output buffer
+*/
+/******************************************************************************/
+void WriteNewAsteroids(std::ostream& output)
+{
+	char commandID = SERVER_ASTEROID_CREATION;
+	output.write(reinterpret_cast<const char*>(&commandID), sizeof(char));
+	unsigned short numAsteroids = static_cast<unsigned short>(newAsteroidQueue.size());
+	output.write(reinterpret_cast<const char*>(&numAsteroids), sizeof(unsigned short));
+
+	while (!newAsteroidQueue.empty())
+	{
+		Asteroids asteroid = newAsteroidQueue.front();
+		newAsteroidQueue.pop();
+
+		output.write(reinterpret_cast<const char*>(&asteroid.id), sizeof(int));
+		output.write(reinterpret_cast<const char*>(&asteroid.Position_x), sizeof(float));
+		output.write(reinterpret_cast<const char*>(&asteroid.Position_y), sizeof(float));
+		output.write(reinterpret_cast<const char*>(&asteroid.Velocity_x), sizeof(float));
+		output.write(reinterpret_cast<const char*>(&asteroid.Velocity_y), sizeof(float));
+		output.write(reinterpret_cast<const char*>(&asteroid.Rotation), sizeof(float));
+		output.write(reinterpret_cast<const char*>(&asteroid.Scale_x), sizeof(float));
+		output.write(reinterpret_cast<const char*>(&asteroid.Scale_y), sizeof(float));
+		output.write(reinterpret_cast<const char*>(&asteroid.time_of_creation), sizeof(float));
+	}
+}
 
 
 

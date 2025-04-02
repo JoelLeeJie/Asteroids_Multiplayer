@@ -20,6 +20,19 @@ float	 g_dt;
 double	 g_appTime;
 bool isGameRunning = true;
 
+/*
+	\brief
+	Sends an RDT JOIN_REQUEST to the server
+*/
+void SendJoinRequest()
+{
+	char message = JOIN_REQUEST;
+	std::lock_guard<std::mutex> player_lock{ this_player_lock };
+	//Send the General Command ID only to message queue, then let the other thread handle the checksum and sequence number.
+	this_player.messages_to_send.push(std::string(&message, &(message)+1));
+	this_player.reliable_transfer.toSend = true;
+}
+
 /******************************************************************************/
 /*!
 	Starting point of the application
@@ -59,6 +72,10 @@ int WINAPI WinMain(HINSTANCE instanceH, HINSTANCE prevInstanceH, LPSTR command_l
 		return returnVal;
 	}
 	std::thread thread_that_handles_receiving_sending_messages(ReceiveSendMessages);
+	/*
+		Get Player ID and any other information required.
+	*/
+	SendJoinRequest();
 
 	GameStateMgrInit(GS_ASTEROIDS);
 

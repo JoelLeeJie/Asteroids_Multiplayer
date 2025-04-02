@@ -117,16 +117,6 @@ struct GameObjInst
 
 };
 
-// bullet struct
-//struct Bullet {
-//
-//	int objectID;
-//	AEVec2 pos;
-//	AEVec2 velocity;
-//	float rotation;
-//	float timeStamp;
-//};
-
 /******************************************************************************/
 /*!
 	Static Variables
@@ -155,10 +145,7 @@ static unsigned long		sScore;										// Current score
 
 static bool runGame;
 
-// map to store bullet info 
-static std::map<unsigned short, std::vector<Bullet>> bulletMap;
 
-static std::queue<GameObjInst*> newAsteroidQueue;
 
 // asteroid collision data map
 static std::map<unsigned short, std::map<unsigned int, float>> asteroidCollisionMap;
@@ -178,100 +165,6 @@ void				gameObjInstDestroy(GameObjInst* pInst);
 
 void				Helper_Wall_Collision();
 
-//void				ReadBullet(std::istream& input, unsigned short playerID);
-//
-//void				WriteBullet(std::ostream& output);
-
-//void Test_ReadThenWriteBulletRoundTrip()
-//{
-//	// ---------------------
-//	// Setup: manually construct an input stream (mock from UDP)
-//	// ---------------------
-//	std::stringstream inputStream;
-//
-//	unsigned short playerID = 123;
-//	unsigned short numBullets = 1;
-//	int objectID = 5;
-//	float posX = 100.0f, posY = 200.0f;
-//	float velX = 5.0f, velY = -3.0f;
-//	float rotation = 0.785f;
-//	float timestamp = static_cast<float>(AEGetTime(nullptr));
-//
-//	// Manual binary write (as if it came from UDP message)
-//	inputStream.write(reinterpret_cast<char*>(&numBullets), sizeof(unsigned short));
-//	inputStream.write(reinterpret_cast<char*>(&objectID), sizeof(int));
-//	inputStream.write(reinterpret_cast<char*>(&posX), sizeof(float));
-//	inputStream.write(reinterpret_cast<char*>(&posY), sizeof(float));
-//	inputStream.write(reinterpret_cast<char*>(&velX), sizeof(float));
-//	inputStream.write(reinterpret_cast<char*>(&velY), sizeof(float));
-//	inputStream.write(reinterpret_cast<char*>(&rotation), sizeof(float));
-//	inputStream.write(reinterpret_cast<char*>(&timestamp), sizeof(float));
-//
-//	// ---------------------
-//	// Step 1: Simulate server reading client message
-//	// ---------------------
-//	bulletMap.clear();  // ensure clean state
-//	ReadBullet(inputStream, playerID);
-//
-//	assert(bulletMap.count(playerID) == 1);
-//	assert(bulletMap[playerID].size() == 1);
-//
-//	GameObjInst* bullet = bulletMap[playerID][0];
-//	assert(std::abs(bullet->posCurr.x - posX) < epsilon);
-//	assert(std::abs(bullet->posCurr.y - posY) < epsilon);
-//	assert(std::abs(bullet->velCurr.x - velX) < epsilon);
-//	assert(std::abs(bullet->velCurr.y - velY) < epsilon);
-//	assert(std::abs(bullet->dirCurr - rotation) < epsilon);
-//
-//	// ---------------------
-//	// Step 2: Simulate server writing message to clients
-//	// ---------------------
-//	std::stringstream outputStream;
-//	WriteBullet(outputStream);
-//
-//	std::string written = outputStream.str();
-//	assert(!written.empty());
-//
-//	// ---------------------
-//	// Step 3: Verify round-trip integrity (manual decode)
-//	// ---------------------
-//	std::stringstream verify(written);
-//
-//	unsigned short numPlayersOut;
-//	verify.read(reinterpret_cast<char*>(&numPlayersOut), sizeof(unsigned short));
-//	assert(numPlayersOut == 1);
-//
-//	unsigned short playerIDOut;
-//	verify.read(reinterpret_cast<char*>(&playerIDOut), sizeof(unsigned short));
-//	assert(playerIDOut == playerID);
-//
-//	unsigned short numBulletsOut;
-//	verify.read(reinterpret_cast<char*>(&numBulletsOut), sizeof(unsigned short));
-//	assert(numBulletsOut == 1);
-//
-//	int objectIDOut;
-//	float posXOut, posYOut, velXOut, velYOut, rotationOut, timestampOut;
-//
-//	verify.read(reinterpret_cast<char*>(&objectIDOut), sizeof(int));
-//	verify.read(reinterpret_cast<char*>(&posXOut), sizeof(float));
-//	verify.read(reinterpret_cast<char*>(&posYOut), sizeof(float));
-//	verify.read(reinterpret_cast<char*>(&velXOut), sizeof(float));
-//	verify.read(reinterpret_cast<char*>(&velYOut), sizeof(float));
-//	verify.read(reinterpret_cast<char*>(&rotationOut), sizeof(float));
-//	verify.read(reinterpret_cast<char*>(&timestampOut), sizeof(float));
-//
-//	assert(objectIDOut == objectID);  // If you're using index math to generate objectID
-//
-//	assert(std::abs(posXOut - posX) < epsilon);
-//	assert(std::abs(posYOut - posY) < epsilon);
-//	assert(std::abs(velXOut - velX) < epsilon);
-//	assert(std::abs(velYOut - velY) < epsilon);
-//	assert(std::abs(rotationOut - rotation) < epsilon);
-//	assert(timestampOut >= timestamp);  // AEGetTime() slightly ahead
-//
-//	printf("Test_ReadThenWriteBulletRoundTrip passed.\n");
-//}
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -288,6 +181,8 @@ std::map<unsigned int, std::map<unsigned int, Bullet>> all_bullets;
 unsigned int bullet_ID = 1;
 std::vector<unsigned int> new_players;
 std::vector<std::pair<unsigned int, unsigned int>> new_otherbullets; //list of bullets created by other players
+std::map<unsigned int, Asteroids> Asteroid_map;
+std::vector<CollisionEvent> all_collisions;
 
 float get_TimeStamp() {
 	auto now = std::chrono::steady_clock::now();
@@ -327,18 +222,7 @@ void AddNewAsteroid()
 }
 static bool onValueChange = true;
 
-/*
-	\brief
-	Sends an RDT JOIN_REQUEST to the server
-*/
-void SendJoinRequest()
-{
-	char message = JOIN_REQUEST;
-	std::lock_guard<std::mutex> player_lock{ this_player_lock };
-	//Send the General Command ID only to message queue, then let the other thread handle the checksum and sequence number.
-	this_player.messages_to_send.push(std::string(&message, &(message)+1));
-	this_player.reliable_transfer.toSend = true;
-}
+
 /******************************************************************************/
 /*!
 	"Load" function of this state
@@ -439,8 +323,6 @@ void GameStateAsteroidsLoad(void)
 
 	pObj->pMesh = AEGfxMeshEnd();
 	AE_ASSERT_MESG(pObj->pMesh, "fail to create object!!");
-
-	SendJoinRequest();
 }
 
 /******************************************************************************/
@@ -519,6 +401,7 @@ void GameStateAsteroidsInit(void)
 	//Write_To_Socket(client_socket, message.size(), message.data());
 
 	/////////////////////////////////////////
+	
 }
 
 /******************************************************************************/
@@ -528,6 +411,48 @@ void GameStateAsteroidsInit(void)
 /******************************************************************************/
 void GameStateAsteroidsUpdate(void)
 {
+	static bool isGameStarted = false;
+	static bool pressStartOnce = false;
+	/*
+		Wait for the game to start.
+	*/
+	if (!isGameStarted)
+	{
+		std::lock_guard<std::mutex> player_lock{ this_player_lock };
+		//Press spacebar to send START_GAME command.
+		if (AEInputCheckTriggered(AEVK_SPACE) && runGame == true && !pressStartOnce)
+		{
+			//Only send the start command once.
+			pressStartOnce = true;
+			//Send a Start Command to server when space is pressed.
+			std::string start_game{ (char)START_GAME };
+			this_player.SendLongMessage(start_game);
+		}
+		//==Check for a START_GAME command from server.
+		//No message received yet.
+		if (!this_player.is_recv_message_complete || this_player.recv_buffer.empty())
+		{
+			//So it doesn't hog the mutex while spinlocking.
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			return;
+		}
+		//Message received, check if it's the command.
+		char command_ID = this_player.recv_buffer[0];
+		if (command_ID != START_GAME)
+		{
+			//There shouldn't be any command that is not start game, so this is just in case.
+			this_player.recv_buffer.clear();
+			//Since buffer is cleared.
+			this_player.is_recv_message_complete = false;
+			return;
+		}
+		//Start game command received, clear buffers to ensure game starts afresh.
+		this_player.recv_buffer.clear();
+		//Since buffer is cleared.
+		this_player.is_recv_message_complete = false;
+		isGameStarted = true;
+	}
+
 	// =========================================================
 	// update according to input
 	// =========================================================
@@ -553,6 +478,44 @@ void GameStateAsteroidsUpdate(void)
 	AEVec2 addedAccel{};
 
 	if (sShipLives < 0 || sScore >= 5000) runGame = false;
+
+	//For debug purposes only.
+#ifdef _DEBUG
+	if (AEInputCheckTriggered(AEVK_0) && runGame == true)
+	{
+		std::lock_guard<std::mutex> player_lock{ this_player_lock };
+		std::string firefly_description =
+			"Firefly is a young woman with long, silvery-blonde hair with a teal ombre that reaches her waist, very fair skin, and eyes that are a mix of deep ocean blue and sunset pink.\n\n"
+			"She wears a brown blazer over a green and white dress with a yellow bow tied in the front. Her sleeves are detached and about wrist length, held with black bracelets — right side with a white flower decoration while the left is plain. She also wears a brown headband with a black bow on the left side of her head that she tore from a flag on the battlefield, along with two green feathers. On her legs she wears thigh-high stockings that fade from teal to a dark brown from top to bottom. The tops of the stockings are lined with gold, and her footwear consists of black heels with a base of white, as well as a pair of green gems in the center along with teal, ruffled collars that wrap around her ankles.\n\n"
+			"A member of the Stellaron Hunters, clad in a set of mechanized armor known as \"SAM.\" Her character is marked by unwavering loyalty and steely resolve.\n"
+			"Engineered as a weapon against the Swarm, she experiences accelerated growth, but a tragically shortened lifespan.\n"
+			"She joined the Stellaron Hunters in a quest for a chance at \"life,\" seeking to defy her fated demise.\n\n"
+			"Within the transparent incubation pod, she lay submerged in frigid artificial amniotic fluid, enclosed in a pristine white egg.\n"
+			"As the container trembled, she floated, and instinctively reached the cold and soft edges. She presses against the pod's walls tightly, curled up in a corner, as if that would make her body feel warmer.\n\n"
+			"She heard something heavy fall and the clamor of metal clashing. Intermittent haste-filled footsteps resounded, and the incubator started to shake...\n"
+			"\"Warriors, it is time to awaken...\"\n"
+			"\"For Her Majesty...\"\n"
+			"A pair of mechanical hands scooped her up as blinding light rent the world asunder. She forgot to weep.\n"
+			"\"Feel glory in your birth...\"\n"
+			"\"For Her Majesty...\"\n"
+			"She opened her eyes, yet failed to find the speaker.\n"
+			"She rose up and advanced through heavy curtains, venturing deeper into the palace.\n"
+			"\"Accept your honor, and your destiny...\"\n"
+			"\"For Her Majesty...\"\n"
+			"The cadence of footsteps in unison reverberated through the desolate palace.\n\n"
+			"She traversed the unattended vast garden, navigating through colossal insectoid carcasses and numerous incubators... until finally, she arrived at the resplendent council chamber, where a woman with a blurry face was seated upon the throne, her hands hanging wearily.\n\n"
+			"\"Don't look up.\"\n"
+			"Someone approached her, whispering softly. The person bore an identification tag, AR-26702. What does that signify?\n"
+			"She glanced at herself, AR-26710.\n\n"
+			"\"Come closer... my child...\"\n"
+			"A distant voice emanated from the depths of her mind, casting an inexplicable frenzy upon her consciousness.\n"
+			"She obediently approached the Empress and knelt down, kissing her fingertips.\n\n"
+			"The Empress's touch felt as icy and unyielding as solid ice, momentarily stirring a flicker of perplexity amidst her frenzy.\n"
+			"\"Ignite yourself to the last moment, for the future of Glamoth...\"";
+		this_player.SendLongMessage(firefly_description);
+	}
+#endif
+
 	if (AEInputCheckCurr(AEVK_UP) && runGame == true)
 	{
 		//Normalized forwards direction.
@@ -631,9 +594,13 @@ void GameStateAsteroidsUpdate(void)
 		bullet.Time_Stamp = get_TimeStamp();
 
 		new_bullets[bullet_ID] = bullet; //add it to the new bullet map to send to server
-		all_bullets[this_player.player_ID][bullet_ID] = bullet; //add it to the the all_bullet map
-
+		all_bullets[this_player.player_ID][bullet_ID] = bullet; //add it to the the all_bullet map		
 		bullet_ID++;
+
+		{//just for printing
+			std::lock_guard<std::mutex> player_lock{ this_player_lock };
+			std::cout << "YAY NEW BULLET: bullet size: " << new_bullets.size() << std::endl;
+		}
 
 	}
 
@@ -860,11 +827,11 @@ void GameStateAsteroidsUpdate(void)
 			//update all bullet map
 			auto it = all_bullets.find(pInst->Player_ID);
 
-			if (it == all_bullets.end()) {
+			if (it != all_bullets.end()) {
 
 				//if that sepecific bullet exists in the map
 				auto iter = it->second.find(pInst->Object_ID);
-				if (iter == it->second.end()) {
+				if (iter != it->second.end()) {
 
 					iter->second.Position_X = pInst->posCurr.x;
 					iter->second.Position_Y = pInst->posCurr.y;
@@ -877,7 +844,7 @@ void GameStateAsteroidsUpdate(void)
 			}
 			//update new bullet map
 			auto it2 = new_bullets.find(pInst->Object_ID);
-			if (it2 == new_bullets.end()) {
+			if (it2 != new_bullets.end()) {
 
 				//if that sepecific bullet exists in the map	
 				it2->second.Position_X = pInst->posCurr.x;
@@ -896,11 +863,6 @@ void GameStateAsteroidsUpdate(void)
 
 
 
-
-
-
-
-
 	/////////////////////////////////////////////////////////
 	/////////////////////////////////////////////////////////
 	// WRITE TO SERVER
@@ -913,84 +875,120 @@ void GameStateAsteroidsUpdate(void)
 
 	//need a function to combine all the strings
 
-	std::string player_transform = Write_PlayerTransform(players[this_player.player_ID]);
-	std::string player_bullets = Write_NewBullet(this_player.player_ID, new_bullets);
+	{
+		std::lock_guard<std::mutex> player_lock{ this_player_lock };
+		std::string message_to_SERVER{};
+		message_to_SERVER += Write_PlayerTransform(players[this_player.player_ID]);
 
 
+		if (new_bullets.size()) {
+			message_to_SERVER += Write_NewBullet(this_player.player_ID, new_bullets);
+		}
 
+		
+
+		//std::cout << message_to_SERVER.c_str();
+
+		this_player.SendLongMessage(message_to_SERVER);
+	}
 
 	/////////////////////////////////////////////////////////
 	/////////////////////////////////////////////////////////
 	// READING FROM SERVER
 	////////////////////////////////////////////////////////
 
+	std::string buffer{};
 
-	if (!this_player.recv_buffer.empty() && this_player.is_recv_message_complete) {
+	{
+		std::lock_guard<std::mutex> player_lock{ this_player_lock };
+		if (!this_player.recv_buffer.empty() && this_player.is_recv_message_complete) {
+			buffer = this_player.recv_buffer;
+			this_player.recv_buffer.clear(); //Clear since it's been read.
+			this_player.is_recv_message_complete = false; //Since buffer has been cleared.
+		}
 
+
+	}
+
+	if (!buffer.empty()) {
 
 		//we need to split first (ROLL EYE)
 		//we need to do bytes checking, function should return the number of bytes read
 
+		int bytes_read = 0;
 
-		uint8_t Command_ID = this_player.recv_buffer[0];
+		while (bytes_read < buffer.size()) {
 
-		if (Command_ID == 0x4) { //server_player_transform
+			uint8_t Command_ID = buffer[bytes_read]; //lets say 0
+			bytes_read++;
+			// reads 5, read next command
 
+			if (Command_ID == 0x4) { //server_player_transform
+				if (bytes_read >= buffer.size()) break; //No more things to read.
+				std::string result = buffer.substr(bytes_read); // Starts at index 1 and goes to the end
+				bytes_read += Read_PlayersTransform(result, players, new_players); //add to player map, lets say 5
+				//so now bytes read will be 6
 
-			//void Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>&player_map); //add to player map
+				//create new players
+				for (unsigned int player : new_players) {
 
-			
-			//create new players
-			for (unsigned int player : new_players) {
-
-				auto it = players.find(player);
-
-				
-				if (it != players.end()) {
-
-					AEVec2 scale;
-					AEVec2 pos{ it->second.Position_X, it->second.Position_Y };
-					AEVec2 vel{ it->second.Velocity_X, it->second.Velocity_Y };
-
-					AEVec2Set(&scale, SHIP_SCALE_X, SHIP_SCALE_Y);
-					gameObjInstCreate((int)player, -1, TYPE_SHIP, &scale, &pos, &vel, it->second.Rotation);
-					sGameObjInstNum++;
-
-				}
-			}
+					auto it = players.find(player);
 
 
-		}else if (Command_ID == 0x5) { //server_bullet_transform
-			
-			//create new_other bullets
-			for (std::pair<unsigned int, unsigned int> one_bullet : new_otherbullets) {
+					if (it != players.end()) {
 
-				//check whether the bullet exisits in the all bullet map or not
-				auto it = all_bullets.find(one_bullet.first);
+						AEVec2 scale;
+						AEVec2 pos{ it->second.Position_X, it->second.Position_Y };
+						AEVec2 vel{ it->second.Velocity_X, it->second.Velocity_Y };
 
-				if (it == all_bullets.end()) {
-
-					//if that sepecific bullet exists in the map
-					auto iter = it->second.find(one_bullet.second);
-					if (iter == it->second.end()) {
-
-						AEVec2 scale{ BULLET_SCALE_X, BULLET_SCALE_Y };
-						AEVec2 pos{ iter->second.Position_X, iter->second.Position_Y };
-						AEVec2 vel{ iter->second.Velocity_X, iter->second.Velocity_Y };
-
-						//gameObjInstCreate(TYPE_BULLET, &scale, &spShip->posCurr, &vel, spShip->dirCurr);
-						gameObjInstCreate(this_player.player_ID, one_bullet.second, TYPE_BULLET, &scale, &pos, &vel, iter->second.Rotation);
+						AEVec2Set(&scale, SHIP_SCALE_X, SHIP_SCALE_Y);
+						gameObjInstCreate((int)player, -1, TYPE_SHIP, &scale, &pos, &vel, it->second.Rotation);
 						sGameObjInstNum++;
 
 					}
 				}
 
+
 			}
+			else if (Command_ID == 0x5) { //server_bullet_transform
+				if (bytes_read >= buffer.size()) break; //No more things to read.
+				std::string result = buffer.substr(bytes_read); // Starts at index 1 and goes to the end
+				bytes_read += Read_New_Bullets(result, all_bullets, players, new_otherbullets);
+
+				for (std::pair<unsigned int, unsigned int> one_bullet : new_otherbullets) {
+
+					//check whether the bullet exisits in the all bullet map or not
+					auto it = all_bullets.find(one_bullet.first);
+
+					if (it != all_bullets.end()) {
+
+						//if that sepecific bullet exists in the map
+						auto iter = it->second.find(one_bullet.second);
+						if (iter != it->second.end()) {
+
+							AEVec2 scale{ BULLET_SCALE_X, BULLET_SCALE_Y };
+							AEVec2 pos{ iter->second.Position_X, iter->second.Position_Y };
+							AEVec2 vel{ iter->second.Velocity_X, iter->second.Velocity_Y };
+
+							//gameObjInstCreate(TYPE_BULLET, &scale, &spShip->posCurr, &vel, spShip->dirCurr);
+							gameObjInstCreate(this_player.player_ID, one_bullet.second, TYPE_BULLET, &scale, &pos, &vel, iter->second.Rotation);
+							sGameObjInstNum++;
+
+						}
+					}
+
+				}
+
+			}
+
 
 		}
 
-
 	}
+	
+
+
+	
 
 
 	/////////////////////////////////////////////////////////
@@ -1086,7 +1084,7 @@ void GameStateAsteroidsUpdate(void)
 
 	}
 
-	//clear the map for new studd since we already create and update the values already
+	////clear the map for new studd since we already create and update the values already
 	new_otherbullets.clear();
 	new_players.clear();
 
@@ -1288,14 +1286,15 @@ GameObjInst* gameObjInstCreate(int player_id, int object_id, unsigned long type,
 			pInst->Player_ID = player_id;
 
 			if (player_id == -1) {
-				std::cout << "OMG, the player ID is 0 means does not Exist\n";
+				PrintString("OMG, the player ID is -1 means does not Exist");
+				player_id = 28; //randomely assign first
 			}
 
 			if (object_id == -1) {
 				//means that this is the player
 				//player dont have object id, only player_id
 
-				std::cout << "A new player is being created!\n";
+				PrintString("A new player is being created!");
 
 			}
 
@@ -1386,146 +1385,6 @@ void Helper_Wall_Collision()
 	}
 }
 
-/******************************************************************************/
-/*!
-\brief
-Reads bullet spawn message from the client and store them in the map to write
-back to the players
-format: everything after command id
-[2 bytes, number of bullets][4bytes, int Object ID][4 bytes, float X position]
-[4 bytes, float Y position][8 bytes, vec2 velocity][4 bytes, float rotation]
-[4 bytes, float timestamp]...
-*/
-/******************************************************************************/
-//void ReadBullet(std::istream& input, unsigned short playerID)
-//{
-//	unsigned short numBullets = 0;
-//	input.read(reinterpret_cast<char*>(&numBullets), sizeof(unsigned short));
-//
-//	for (int i = 0; i < numBullets; ++i)
-//	{
-//		int objectID;
-//		float posX, posY;
-//		float velX, velY;
-//		float rotation;
-//		float timestamp;
-//
-//		input.read(reinterpret_cast<char*>(&objectID), sizeof(int));
-//		input.read(reinterpret_cast<char*>(&posX), sizeof(float));
-//		input.read(reinterpret_cast<char*>(&posY), sizeof(float));
-//		input.read(reinterpret_cast<char*>(&velX), sizeof(float));
-//		input.read(reinterpret_cast<char*>(&velY), sizeof(float));
-//		input.read(reinterpret_cast<char*>(&rotation), sizeof(float));
-//		input.read(reinterpret_cast<char*>(&timestamp), sizeof(float));
-//
-//		AEVec2 pos = { posX, posY };
-//		AEVec2 vel = { velX, velY };
-//		AEVec2 scale = { BULLET_SCALE_X, BULLET_SCALE_Y };
-//		Bullet newBullet = { objectID, pos, vel, rotation, timestamp };
-//		bulletMap[playerID].push_back(newBullet);
-//	}
-//}
-
-/******************************************************************************/
-/*!
-\brief
-writes the bullet message back into the output stream
-format:
-[Player ID1][All the bullets of player 1][Player ID 2][All the bullets of player 2]...
-*/
-/******************************************************************************/
-//void WriteBullet(std::ostream& output)
-//{
-//	/*unsigned short numPlayers = static_cast<unsigned short>(bulletMap.size());
-//	output.write(reinterpret_cast<const char*>(&numPlayers), sizeof(unsigned short));*/
-//
-//	for (const auto& [playerID, bullets] : bulletMap)
-//	{
-//		output.write(reinterpret_cast<const char*>(&playerID), sizeof(unsigned short));
-//
-//		unsigned short numBullets = static_cast<unsigned short>(bullets.size());
-//		output.write(reinterpret_cast<const char*>(&numBullets), sizeof(unsigned short));
-//
-//		for (Bullet bullet : bullets)
-//		{
-//			float timestamp = static_cast<float>(AEGetTime(nullptr));
-//
-//			output.write(reinterpret_cast<const char*>(&bullet.objectID), sizeof(int));
-//			output.write(reinterpret_cast<const char*>(&bullet.pos.x), sizeof(float));
-//			output.write(reinterpret_cast<const char*>(&bullet.pos.y), sizeof(float));
-//			output.write(reinterpret_cast<const char*>(&bullet.velocity.x), sizeof(float));
-//			output.write(reinterpret_cast<const char*>(&bullet.velocity.y), sizeof(float));
-//			output.write(reinterpret_cast<const char*>(&bullet.rotation), sizeof(float));
-//			output.write(reinterpret_cast<const char*>(&bullet.timeStamp), sizeof(float));
-//		}
-//	}
-//
-//	bulletMap.clear();
-//}
-
-
-/******************************************************************************/
-/*!
-\brief
-Create asteriods and push them into the queue for writing later
-*/
-/******************************************************************************/
-void CreateNewAsteroid()
-{
-	//static lambda to only run once.
-	static auto once = []() {
-		srand((unsigned int)AEGetTime(nullptr));
-		};
-	AEVec2 pos, vel, scale;
-	//Set it so that it doesn't spawn on the player.
-	do
-	{
-		pos = { (float)(rand() % ((int)AEGfxGetWinMaxX() * 2)) + AEGfxGetWinMinX(), (float)(rand() % ((int)AEGfxGetWinMaxY() * 2)) + AEGfxGetWinMinY() };
-
-	} while (pos.x < spShip->posCurr.x + 200 && pos.x > spShip->posCurr.x - 200
-		|| pos.y < spShip->posCurr.y + 200 && pos.y > spShip->posCurr.y - 200);
-	vel = { (float)(rand() % 200) - 100.f,(float)(rand() % 200) - 100.f };
-	scale = { (float)(rand() % (int)(ASTEROID_MAX_SCALE_X - ASTEROID_MIN_SCALE_X))
-		+ ASTEROID_MIN_SCALE_X,(float)(rand() % (int)(ASTEROID_MAX_SCALE_Y - ASTEROID_MIN_SCALE_Y) + ASTEROID_MIN_SCALE_Y) };
-
-	GameObjInst* asteroid = gameObjInstCreate(TYPE_ASTEROID, &scale, &pos, &vel, 0.0f);
-	sGameObjInstNum++;
-
-	newAsteroidQueue.push(asteroid);
-}
-
-
-/******************************************************************************/
-/*!
-\brief
-Create asteriods and push them into the queue for writing later
-*/
-/******************************************************************************/
-void WriteNewAsteroids(std::ostream& output)
-{
-	unsigned short numAsteroids = static_cast<unsigned short>(newAsteroidQueue.size());
-	output.write(reinterpret_cast<const char*>(&numAsteroids), sizeof(unsigned short));
-
-	while (!newAsteroidQueue.empty())
-	{
-		GameObjInst* asteroid = newAsteroidQueue.front();
-		newAsteroidQueue.pop();
-
-		int objectID = static_cast<int>(asteroid - sGameObjInstList); // or use hash or internal ID
-
-		float timestamp = static_cast<float>(AEGetTime(nullptr));
-
-		output.write(reinterpret_cast<const char*>(&objectID), sizeof(int));
-		output.write(reinterpret_cast<const char*>(&asteroid->posCurr.x), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&asteroid->posCurr.y), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&asteroid->velCurr.x), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&asteroid->velCurr.y), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&asteroid->dirCurr), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&asteroid->scale.x), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&asteroid->scale.y), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&timestamp), sizeof(float));
-	}
-}
 
 
 
