@@ -183,38 +183,6 @@ struct Player {
 
 };//add new asteroid to the map 
 
-// Constants
-constexpr float AUTOMATIC_DISCONNECTION_TIMER = 4.f; // Time before server stops waiting for player response, and disconnects them.
-const float			ASTEROID_MIN_SCALE_X = 10.0f;		// asteroid minimum scale x
-const float			ASTEROID_MAX_SCALE_X = 60.0f;		// asteroid maximum scale x
-const float			ASTEROID_MIN_SCALE_Y = 10.0f;		// asteroid minimum scale y
-const float			ASTEROID_MAX_SCALE_Y = 60.0f;		// asteroid maximum scale y
-const float			COLLISION_RADIUS_NDC = 0.2f;		// asteroid maximum scale y
-
-// Containers
-std::map<int, Player_Session> player_Session_Map{}; // Used to manage interactions with players, including sending/receiving, automatic disconnection, reliable data transfer.
-std::mutex session_map_lock{};
-std::array<unsigned char, 4> server_ip_addr{}; // Server information, set and forget in main().
-std::map<unsigned short, std::vector<Bullet>> bulletMap; // map to store bullet, asteroid and player info
-std::queue<Asteroids> newAsteroidQueue;
-std::queue<Packet> packet_recv_queue{}; // For temporarily storing packets received.
-
-// Global vars
-int server_tcp_port_number{}, server_udp_port_number{};
-static unsigned int asteroidCount = 0;
-//Controls what the next player's ID should be, to prevent players from having the same ID.
-//Reconnecting players will reconnect via sending the player_ID, letting the server know which session to reassume.
-int player_id = 0;
-
-//For any sending/receiving, set at the start.
-SOCKET udp_socket{};
-std::mutex socket_lock{};
-std::mutex packet_queue_lock{};
-
-
-//Indicates if the game has ended, so0 the multi-threaded functions can end too.
-bool isGameRunning{ true };
-
 // asteroid collision and player transform data structs
 struct PlayerTransform {
 	float Position_X, Position_Y;
@@ -230,15 +198,46 @@ struct AsteroidCollision {
 	float timestamp;
 };
 
+
+// Constants
+constexpr float AUTOMATIC_DISCONNECTION_TIMER = 4.f; // Time before server stops waiting for player response, and disconnects them.
+const float			ASTEROID_MIN_SCALE_X = 10.0f;		// asteroid minimum scale x
+const float			ASTEROID_MAX_SCALE_X = 60.0f;		// asteroid maximum scale x
+const float			ASTEROID_MIN_SCALE_Y = 10.0f;		// asteroid minimum scale y
+const float			ASTEROID_MAX_SCALE_Y = 60.0f;		// asteroid maximum scale y
+const float			COLLISION_RADIUS_NDC = 0.2f;		// asteroid maximum scale y
+
+// Containers
+std::map<int, Player_Session> player_Session_Map{}; // Used to manage interactions with players, including sending/receiving, automatic disconnection, reliable data transfer.
+std::mutex session_map_lock{};
+std::array<unsigned char, 4> server_ip_addr{}; // Server information, set and forget in main().
+std::map<unsigned short, std::vector<Bullet>> bulletMap; // map to store bullet, asteroid and player info
+std::queue<Asteroids> newAsteroidQueue;
+std::queue<Packet> packet_recv_queue{}; // For temporarily storing packets received.
 std::map<unsigned int, PlayerTransform> playerTransforms;
 std::map<unsigned int, AsteroidCollision> asteroidCollisions;
 
-//Forward declarations:
+// Global vars
+int server_tcp_port_number{}, server_udp_port_number{};
+static unsigned int asteroidCount = 0;
+// Controls what the next player's ID should be, to prevent players from having the same ID.
+// Reconnecting players will reconnect via sending the player_ID, letting the server know which session to reassume.
+int player_id = 0;
+
+// For any sending/receiving, set at the start.
+SOCKET udp_socket{};
+std::mutex socket_lock{};
+std::mutex packet_queue_lock{};
+
+
+// Indicates if the game has ended, so0 the multi-threaded functions can end too.
+bool isGameRunning{ true };
+
+// Forward declarations:
 void ReadPlayerTransforms(std::istream& input, unsigned short playerID);
 void WritePlayerTransforms(std::ostream& output);
 void ReadAsteroidCollisions(std::istream& input, unsigned short playerID);
 void WriteAsteroidCollision(std::ostream& output);
-
 
 void ReadBullet(std::istream& input, unsigned short playerID);
 void WriteBullet(std::ostream& output);
@@ -340,8 +339,10 @@ void GameProgram()
 					break;
 				case CLIENT_PLAYER_TRANSFORM:
 					ReadPlayerTransforms(msgStream, player_pair.first);
+					break;
 				case CLIENT_COLLISION:
 					ReadAsteroidCollisions(msgStream, player_pair.first);
+					break;
 				default:
 					break;
 				}

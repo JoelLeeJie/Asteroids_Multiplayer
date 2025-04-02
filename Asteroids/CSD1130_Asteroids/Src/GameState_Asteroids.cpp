@@ -953,6 +953,10 @@ void GameStateAsteroidsUpdate(void)
 			else if (Command_ID == 0x5) { //server_bullet_transform
 				if (bytes_read >= buffer.size()) break; //No more things to read.
 				std::string result = buffer.substr(bytes_read); // Starts at index 1 and goes to the end
+				// test if msg is empty
+				/*if (result.size()) {
+					continue;
+				}*/
 				bytes_read += Read_New_Bullets(result, all_bullets, players, new_otherbullets);
 
 				for (std::pair<unsigned int, unsigned int> one_bullet : new_otherbullets) {
