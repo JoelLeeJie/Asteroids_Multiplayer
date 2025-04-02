@@ -114,16 +114,6 @@ struct GameObjInst
 
 };
 
-// bullet struct
-//struct Bullet {
-//
-//	int objectID;
-//	AEVec2 pos;
-//	AEVec2 velocity;
-//	float rotation;
-//	float timeStamp;
-//};
-
 /******************************************************************************/
 /*!
 	Static Variables
@@ -152,10 +142,7 @@ static unsigned long		sScore;										// Current score
 
 static bool runGame;
 
-// map to store bullet info 
-static std::map<unsigned short, std::vector<Bullet>> bulletMap;
 
-static std::queue<GameObjInst*> newAsteroidQueue;
 
 // ---------------------------------------------------------------------------
 
@@ -170,100 +157,6 @@ GameObjInst* gameObjInstCreate(int player_id, int object_id, unsigned long type,
 void				gameObjInstDestroy(GameObjInst* pInst);
 
 void				Helper_Wall_Collision();
-
-//void				ReadBullet(std::istream& input, unsigned short playerID);
-//
-//void				WriteBullet(std::ostream& output);
-
-//void Test_ReadThenWriteBulletRoundTrip()
-//{
-//	// ---------------------
-//	// Setup: manually construct an input stream (mock from UDP)
-//	// ---------------------
-//	std::stringstream inputStream;
-//
-//	unsigned short playerID = 123;
-//	unsigned short numBullets = 1;
-//	int objectID = 5;
-//	float posX = 100.0f, posY = 200.0f;
-//	float velX = 5.0f, velY = -3.0f;
-//	float rotation = 0.785f;
-//	float timestamp = static_cast<float>(AEGetTime(nullptr));
-//
-//	// Manual binary write (as if it came from UDP message)
-//	inputStream.write(reinterpret_cast<char*>(&numBullets), sizeof(unsigned short));
-//	inputStream.write(reinterpret_cast<char*>(&objectID), sizeof(int));
-//	inputStream.write(reinterpret_cast<char*>(&posX), sizeof(float));
-//	inputStream.write(reinterpret_cast<char*>(&posY), sizeof(float));
-//	inputStream.write(reinterpret_cast<char*>(&velX), sizeof(float));
-//	inputStream.write(reinterpret_cast<char*>(&velY), sizeof(float));
-//	inputStream.write(reinterpret_cast<char*>(&rotation), sizeof(float));
-//	inputStream.write(reinterpret_cast<char*>(&timestamp), sizeof(float));
-//
-//	// ---------------------
-//	// Step 1: Simulate server reading client message
-//	// ---------------------
-//	bulletMap.clear();  // ensure clean state
-//	ReadBullet(inputStream, playerID);
-//
-//	assert(bulletMap.count(playerID) == 1);
-//	assert(bulletMap[playerID].size() == 1);
-//
-//	GameObjInst* bullet = bulletMap[playerID][0];
-//	assert(std::abs(bullet->posCurr.x - posX) < epsilon);
-//	assert(std::abs(bullet->posCurr.y - posY) < epsilon);
-//	assert(std::abs(bullet->velCurr.x - velX) < epsilon);
-//	assert(std::abs(bullet->velCurr.y - velY) < epsilon);
-//	assert(std::abs(bullet->dirCurr - rotation) < epsilon);
-//
-//	// ---------------------
-//	// Step 2: Simulate server writing message to clients
-//	// ---------------------
-//	std::stringstream outputStream;
-//	WriteBullet(outputStream);
-//
-//	std::string written = outputStream.str();
-//	assert(!written.empty());
-//
-//	// ---------------------
-//	// Step 3: Verify round-trip integrity (manual decode)
-//	// ---------------------
-//	std::stringstream verify(written);
-//
-//	unsigned short numPlayersOut;
-//	verify.read(reinterpret_cast<char*>(&numPlayersOut), sizeof(unsigned short));
-//	assert(numPlayersOut == 1);
-//
-//	unsigned short playerIDOut;
-//	verify.read(reinterpret_cast<char*>(&playerIDOut), sizeof(unsigned short));
-//	assert(playerIDOut == playerID);
-//
-//	unsigned short numBulletsOut;
-//	verify.read(reinterpret_cast<char*>(&numBulletsOut), sizeof(unsigned short));
-//	assert(numBulletsOut == 1);
-//
-//	int objectIDOut;
-//	float posXOut, posYOut, velXOut, velYOut, rotationOut, timestampOut;
-//
-//	verify.read(reinterpret_cast<char*>(&objectIDOut), sizeof(int));
-//	verify.read(reinterpret_cast<char*>(&posXOut), sizeof(float));
-//	verify.read(reinterpret_cast<char*>(&posYOut), sizeof(float));
-//	verify.read(reinterpret_cast<char*>(&velXOut), sizeof(float));
-//	verify.read(reinterpret_cast<char*>(&velYOut), sizeof(float));
-//	verify.read(reinterpret_cast<char*>(&rotationOut), sizeof(float));
-//	verify.read(reinterpret_cast<char*>(&timestampOut), sizeof(float));
-//
-//	assert(objectIDOut == objectID);  // If you're using index math to generate objectID
-//
-//	assert(std::abs(posXOut - posX) < epsilon);
-//	assert(std::abs(posYOut - posY) < epsilon);
-//	assert(std::abs(velXOut - velX) < epsilon);
-//	assert(std::abs(velYOut - velY) < epsilon);
-//	assert(std::abs(rotationOut - rotation) < epsilon);
-//	assert(timestampOut >= timestamp);  // AEGetTime() slightly ahead
-//
-//	printf("Test_ReadThenWriteBulletRoundTrip passed.\n");
-//}
 
 
 
@@ -281,6 +174,7 @@ std::map<unsigned int, std::map<unsigned int, Bullet>> all_bullets;
 unsigned int bullet_ID = 1;
 std::vector<unsigned int> new_players;
 std::vector<std::pair<unsigned int, unsigned int>> new_otherbullets; //list of bullets created by other players
+
 
 float get_TimeStamp() {
 	auto now = std::chrono::steady_clock::now();
@@ -927,11 +821,6 @@ void GameStateAsteroidsUpdate(void)
 
 
 
-
-
-
-
-
 	/////////////////////////////////////////////////////////
 	/////////////////////////////////////////////////////////
 	// WRITE TO SERVER
@@ -944,94 +833,105 @@ void GameStateAsteroidsUpdate(void)
 
 	//need a function to combine all the strings
 
-	std::string player_transform = Write_PlayerTransform(players[this_player.player_ID]);
-	std::string player_bullets = Write_NewBullet(this_player.player_ID, new_bullets);
+	{
+		std::lock_guard<std::mutex> player_lock{ this_player_lock };
+		std::string message_to_SERVER{};
+		message_to_SERVER += Write_PlayerTransform(players[this_player.player_ID]);
+		message_to_SERVER += Write_NewBullet(this_player.player_ID, new_bullets);
 
+		//std::cout << message_to_SERVER.c_str();
 
-
+		this_player.SendLongMessage(message_to_SERVER);
+	}
 
 	/////////////////////////////////////////////////////////
 	/////////////////////////////////////////////////////////
 	// READING FROM SERVER
 	////////////////////////////////////////////////////////
 
+	{
+		std::lock_guard<std::mutex> player_lock{ this_player_lock };
 
-	if (!this_player.recv_buffer.empty() && this_player.is_recv_message_complete) {
-
-
-		//we need to split first (ROLL EYE)
-		//we need to do bytes checking, function should return the number of bytes read
-
-		int bytes_read = 0;
-
-		while (bytes_read <= this_player.recv_buffer.size()) {
-
-			uint8_t Command_ID = this_player.recv_buffer[bytes_read]; //lets say 0
-			bytes_read += 1;
-			std::string result = this_player.recv_buffer.substr(bytes_read); // Starts at index 1 and goes to the end
-			                                                                 // reads 5, read next command
-
-			if (Command_ID == 0x4) { //server_player_transform
+		if (!this_player.recv_buffer.empty() && this_player.is_recv_message_complete) {
 
 
-				bytes_read += Read_PlayersTransform(result, players, new_players); //add to player map, lets say 5
-				//so now bytes read will be 6
+			//we need to split first (ROLL EYE)
+			//we need to do bytes checking, function should return the number of bytes read
 
-				//create new players
-				for (unsigned int player : new_players) {
+			int bytes_read = 0;
 
-					auto it = players.find(player);
+			while (bytes_read <= this_player.recv_buffer.size()) {
 
+				uint8_t Command_ID = this_player.recv_buffer[bytes_read]; //lets say 0
+				bytes_read += 1;
+				std::string result = this_player.recv_buffer.substr(bytes_read); // Starts at index 1 and goes to the end
+				// reads 5, read next command
 
-					if (it != players.end()) {
-
-						AEVec2 scale;
-						AEVec2 pos{ it->second.Position_X, it->second.Position_Y };
-						AEVec2 vel{ it->second.Velocity_X, it->second.Velocity_Y };
-
-						AEVec2Set(&scale, SHIP_SCALE_X, SHIP_SCALE_Y);
-						gameObjInstCreate((int)player, -1, TYPE_SHIP, &scale, &pos, &vel, it->second.Rotation);
-						sGameObjInstNum++;
-
-					}
-				}
+				if (Command_ID == 0x4) { //server_player_transform
 
 
-			}
-			else if (Command_ID == 0x5) { //server_bullet_transform
+					bytes_read += Read_PlayersTransform(result, players, new_players); //add to player map, lets say 5
+					//so now bytes read will be 6
 
-				bytes_read += Read_New_Bullets(result, all_bullets, players, new_otherbullets);
+					//create new players
+					for (unsigned int player : new_players) {
 
-				for (std::pair<unsigned int, unsigned int> one_bullet : new_otherbullets) {
+						auto it = players.find(player);
 
-					//check whether the bullet exisits in the all bullet map or not
-					auto it = all_bullets.find(one_bullet.first);
 
-					if (it != all_bullets.end()) {
+						if (it != players.end()) {
 
-						//if that sepecific bullet exists in the map
-						auto iter = it->second.find(one_bullet.second);
-						if (iter != it->second.end()) {
+							AEVec2 scale;
+							AEVec2 pos{ it->second.Position_X, it->second.Position_Y };
+							AEVec2 vel{ it->second.Velocity_X, it->second.Velocity_Y };
 
-							AEVec2 scale{ BULLET_SCALE_X, BULLET_SCALE_Y };
-							AEVec2 pos{ iter->second.Position_X, iter->second.Position_Y };
-							AEVec2 vel{ iter->second.Velocity_X, iter->second.Velocity_Y };
-
-							//gameObjInstCreate(TYPE_BULLET, &scale, &spShip->posCurr, &vel, spShip->dirCurr);
-							gameObjInstCreate(this_player.player_ID, one_bullet.second, TYPE_BULLET, &scale, &pos, &vel, iter->second.Rotation);
+							AEVec2Set(&scale, SHIP_SCALE_X, SHIP_SCALE_Y);
+							gameObjInstCreate((int)player, -1, TYPE_SHIP, &scale, &pos, &vel, it->second.Rotation);
 							sGameObjInstNum++;
 
 						}
 					}
 
+
 				}
+				else if (Command_ID == 0x5) { //server_bullet_transform
+
+					bytes_read += Read_New_Bullets(result, all_bullets, players, new_otherbullets);
+
+					for (std::pair<unsigned int, unsigned int> one_bullet : new_otherbullets) {
+
+						//check whether the bullet exisits in the all bullet map or not
+						auto it = all_bullets.find(one_bullet.first);
+
+						if (it != all_bullets.end()) {
+
+							//if that sepecific bullet exists in the map
+							auto iter = it->second.find(one_bullet.second);
+							if (iter != it->second.end()) {
+
+								AEVec2 scale{ BULLET_SCALE_X, BULLET_SCALE_Y };
+								AEVec2 pos{ iter->second.Position_X, iter->second.Position_Y };
+								AEVec2 vel{ iter->second.Velocity_X, iter->second.Velocity_Y };
+
+								//gameObjInstCreate(TYPE_BULLET, &scale, &spShip->posCurr, &vel, spShip->dirCurr);
+								gameObjInstCreate(this_player.player_ID, one_bullet.second, TYPE_BULLET, &scale, &pos, &vel, iter->second.Rotation);
+								sGameObjInstNum++;
+
+							}
+						}
+
+					}
+
+				}
+
 
 			}
 
-
 		}
-
 	}
+
+
+	
 
 
 	/////////////////////////////////////////////////////////
@@ -1427,145 +1327,5 @@ void Helper_Wall_Collision()
 	}
 }
 
-/******************************************************************************/
-/*!
-\brief
-Reads bullet spawn message from the client and store them in the map to write
-back to the players
-format: everything after command id
-[2 bytes, number of bullets][4bytes, int Object ID][4 bytes, float X position]
-[4 bytes, float Y position][8 bytes, vec2 velocity][4 bytes, float rotation]
-[4 bytes, float timestamp]...
-*/
-/******************************************************************************/
-//void ReadBullet(std::istream& input, unsigned short playerID)
-//{
-//	unsigned short numBullets = 0;
-//	input.read(reinterpret_cast<char*>(&numBullets), sizeof(unsigned short));
-//
-//	for (int i = 0; i < numBullets; ++i)
-//	{
-//		int objectID;
-//		float posX, posY;
-//		float velX, velY;
-//		float rotation;
-//		float timestamp;
-//
-//		input.read(reinterpret_cast<char*>(&objectID), sizeof(int));
-//		input.read(reinterpret_cast<char*>(&posX), sizeof(float));
-//		input.read(reinterpret_cast<char*>(&posY), sizeof(float));
-//		input.read(reinterpret_cast<char*>(&velX), sizeof(float));
-//		input.read(reinterpret_cast<char*>(&velY), sizeof(float));
-//		input.read(reinterpret_cast<char*>(&rotation), sizeof(float));
-//		input.read(reinterpret_cast<char*>(&timestamp), sizeof(float));
-//
-//		AEVec2 pos = { posX, posY };
-//		AEVec2 vel = { velX, velY };
-//		AEVec2 scale = { BULLET_SCALE_X, BULLET_SCALE_Y };
-//		Bullet newBullet = { objectID, pos, vel, rotation, timestamp };
-//		bulletMap[playerID].push_back(newBullet);
-//	}
-//}
-
-/******************************************************************************/
-/*!
-\brief
-writes the bullet message back into the output stream
-format:
-[Player ID1][All the bullets of player 1][Player ID 2][All the bullets of player 2]...
-*/
-/******************************************************************************/
-//void WriteBullet(std::ostream& output)
-//{
-//	/*unsigned short numPlayers = static_cast<unsigned short>(bulletMap.size());
-//	output.write(reinterpret_cast<const char*>(&numPlayers), sizeof(unsigned short));*/
-//
-//	for (const auto& [playerID, bullets] : bulletMap)
-//	{
-//		output.write(reinterpret_cast<const char*>(&playerID), sizeof(unsigned short));
-//
-//		unsigned short numBullets = static_cast<unsigned short>(bullets.size());
-//		output.write(reinterpret_cast<const char*>(&numBullets), sizeof(unsigned short));
-//
-//		for (Bullet bullet : bullets)
-//		{
-//			float timestamp = static_cast<float>(AEGetTime(nullptr));
-//
-//			output.write(reinterpret_cast<const char*>(&bullet.objectID), sizeof(int));
-//			output.write(reinterpret_cast<const char*>(&bullet.pos.x), sizeof(float));
-//			output.write(reinterpret_cast<const char*>(&bullet.pos.y), sizeof(float));
-//			output.write(reinterpret_cast<const char*>(&bullet.velocity.x), sizeof(float));
-//			output.write(reinterpret_cast<const char*>(&bullet.velocity.y), sizeof(float));
-//			output.write(reinterpret_cast<const char*>(&bullet.rotation), sizeof(float));
-//			output.write(reinterpret_cast<const char*>(&bullet.timeStamp), sizeof(float));
-//		}
-//	}
-//
-//	bulletMap.clear();
-//}
-
-
-/******************************************************************************/
-/*!
-\brief
-Create asteriods and push them into the queue for writing later
-*/
-/******************************************************************************/
-void CreateNewAsteroid()
-{
-	//static lambda to only run once.
-	static auto once = []() {
-		srand((unsigned int)AEGetTime(nullptr));
-		};
-	AEVec2 pos, vel, scale;
-	//Set it so that it doesn't spawn on the player.
-	do
-	{
-		pos = { (float)(rand() % ((int)AEGfxGetWinMaxX() * 2)) + AEGfxGetWinMinX(), (float)(rand() % ((int)AEGfxGetWinMaxY() * 2)) + AEGfxGetWinMinY() };
-
-	} while (pos.x < spShip->posCurr.x + 200 && pos.x > spShip->posCurr.x - 200
-		|| pos.y < spShip->posCurr.y + 200 && pos.y > spShip->posCurr.y - 200);
-	vel = { (float)(rand() % 200) - 100.f,(float)(rand() % 200) - 100.f };
-	scale = { (float)(rand() % (int)(ASTEROID_MAX_SCALE_X - ASTEROID_MIN_SCALE_X))
-		+ ASTEROID_MIN_SCALE_X,(float)(rand() % (int)(ASTEROID_MAX_SCALE_Y - ASTEROID_MIN_SCALE_Y) + ASTEROID_MIN_SCALE_Y) };
-
-	GameObjInst* asteroid = gameObjInstCreate(TYPE_ASTEROID, &scale, &pos, &vel, 0.0f);
-	sGameObjInstNum++;
-
-	newAsteroidQueue.push(asteroid);
-}
-
-
-/******************************************************************************/
-/*!
-\brief
-Create asteriods and push them into the queue for writing later
-*/
-/******************************************************************************/
-void WriteNewAsteroids(std::ostream& output)
-{
-	unsigned short numAsteroids = static_cast<unsigned short>(newAsteroidQueue.size());
-	output.write(reinterpret_cast<const char*>(&numAsteroids), sizeof(unsigned short));
-
-	while (!newAsteroidQueue.empty())
-	{
-		GameObjInst* asteroid = newAsteroidQueue.front();
-		newAsteroidQueue.pop();
-
-		int objectID = static_cast<int>(asteroid - sGameObjInstList); // or use hash or internal ID
-
-		float timestamp = static_cast<float>(AEGetTime(nullptr));
-
-		output.write(reinterpret_cast<const char*>(&objectID), sizeof(int));
-		output.write(reinterpret_cast<const char*>(&asteroid->posCurr.x), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&asteroid->posCurr.y), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&asteroid->velCurr.x), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&asteroid->velCurr.y), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&asteroid->dirCurr), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&asteroid->scale.x), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&asteroid->scale.y), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&timestamp), sizeof(float));
-	}
-}
 
 

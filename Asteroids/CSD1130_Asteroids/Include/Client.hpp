@@ -139,7 +139,6 @@ extern std::vector<unsigned int> new_players;
 extern std::map<unsigned int, Bullet> new_bullets; //list of bullets created by player
 extern std::map<unsigned int, std::map<unsigned int, Bullet>> all_bullets; //all the bullets
 extern std::vector<std::pair<unsigned int, unsigned int>> new_otherbullets; //list of bullets created by other players
-
 extern unsigned int bullet_ID; //start from 0
 // 
 //std::map<unsigned int, Asteroids> Asteroid_map 
