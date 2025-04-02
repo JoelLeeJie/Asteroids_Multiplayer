@@ -860,86 +860,93 @@ void GameStateAsteroidsUpdate(void)
 	// READING FROM SERVER
 	////////////////////////////////////////////////////////
 
+	std::string buffer{};
+
 	{
 		std::lock_guard<std::mutex> player_lock{ this_player_lock };
-
 		if (!this_player.recv_buffer.empty() && this_player.is_recv_message_complete) {
+			buffer = this_player.recv_buffer;
+		}
 
 
-			//we need to split first (ROLL EYE)
-			//we need to do bytes checking, function should return the number of bytes read
+	}
 
-			int bytes_read = 0;
+	if (!buffer.empty()) {
 
-			while (bytes_read < this_player.recv_buffer.size()) {
+		//we need to split first (ROLL EYE)
+		//we need to do bytes checking, function should return the number of bytes read
 
-				uint8_t Command_ID = this_player.recv_buffer[bytes_read]; //lets say 0
-				bytes_read += 1;
-				std::string result = this_player.recv_buffer.substr(bytes_read); // Starts at index 1 and goes to the end
-				// reads 5, read next command
+		int bytes_read = 0;
 
-				if (Command_ID == 0x4) { //server_player_transform
+		while (bytes_read < buffer.size()) {
 
+			uint8_t Command_ID = buffer[bytes_read]; //lets say 0
+			bytes_read += 1;
+			std::string result = buffer.substr(bytes_read); // Starts at index 1 and goes to the end
+			// reads 5, read next command
 
-					bytes_read += Read_PlayersTransform(result, players, new_players); //add to player map, lets say 5
-					//so now bytes read will be 6
-
-					//create new players
-					for (unsigned int player : new_players) {
-
-						auto it = players.find(player);
+			if (Command_ID == 0x4) { //server_player_transform
 
 
-						if (it != players.end()) {
+				bytes_read += Read_PlayersTransform(result, players, new_players); //add to player map, lets say 5
+				//so now bytes read will be 6
 
-							AEVec2 scale;
-							AEVec2 pos{ it->second.Position_X, it->second.Position_Y };
-							AEVec2 vel{ it->second.Velocity_X, it->second.Velocity_Y };
+				//create new players
+				for (unsigned int player : new_players) {
 
-							AEVec2Set(&scale, SHIP_SCALE_X, SHIP_SCALE_Y);
-							gameObjInstCreate((int)player, -1, TYPE_SHIP, &scale, &pos, &vel, it->second.Rotation);
+					auto it = players.find(player);
+
+
+					if (it != players.end()) {
+
+						AEVec2 scale;
+						AEVec2 pos{ it->second.Position_X, it->second.Position_Y };
+						AEVec2 vel{ it->second.Velocity_X, it->second.Velocity_Y };
+
+						AEVec2Set(&scale, SHIP_SCALE_X, SHIP_SCALE_Y);
+						gameObjInstCreate((int)player, -1, TYPE_SHIP, &scale, &pos, &vel, it->second.Rotation);
+						sGameObjInstNum++;
+
+					}
+				}
+
+
+			}
+			else if (Command_ID == 0x5) { //server_bullet_transform
+
+				bytes_read += Read_New_Bullets(result, all_bullets, players, new_otherbullets);
+
+				for (std::pair<unsigned int, unsigned int> one_bullet : new_otherbullets) {
+
+					//check whether the bullet exisits in the all bullet map or not
+					auto it = all_bullets.find(one_bullet.first);
+
+					if (it != all_bullets.end()) {
+
+						//if that sepecific bullet exists in the map
+						auto iter = it->second.find(one_bullet.second);
+						if (iter != it->second.end()) {
+
+							AEVec2 scale{ BULLET_SCALE_X, BULLET_SCALE_Y };
+							AEVec2 pos{ iter->second.Position_X, iter->second.Position_Y };
+							AEVec2 vel{ iter->second.Velocity_X, iter->second.Velocity_Y };
+
+							//gameObjInstCreate(TYPE_BULLET, &scale, &spShip->posCurr, &vel, spShip->dirCurr);
+							gameObjInstCreate(this_player.player_ID, one_bullet.second, TYPE_BULLET, &scale, &pos, &vel, iter->second.Rotation);
 							sGameObjInstNum++;
 
 						}
 					}
 
-
 				}
-				else if (Command_ID == 0x5) { //server_bullet_transform
-
-					bytes_read += Read_New_Bullets(result, all_bullets, players, new_otherbullets);
-
-					for (std::pair<unsigned int, unsigned int> one_bullet : new_otherbullets) {
-
-						//check whether the bullet exisits in the all bullet map or not
-						auto it = all_bullets.find(one_bullet.first);
-
-						if (it != all_bullets.end()) {
-
-							//if that sepecific bullet exists in the map
-							auto iter = it->second.find(one_bullet.second);
-							if (iter != it->second.end()) {
-
-								AEVec2 scale{ BULLET_SCALE_X, BULLET_SCALE_Y };
-								AEVec2 pos{ iter->second.Position_X, iter->second.Position_Y };
-								AEVec2 vel{ iter->second.Velocity_X, iter->second.Velocity_Y };
-
-								//gameObjInstCreate(TYPE_BULLET, &scale, &spShip->posCurr, &vel, spShip->dirCurr);
-								gameObjInstCreate(this_player.player_ID, one_bullet.second, TYPE_BULLET, &scale, &pos, &vel, iter->second.Rotation);
-								sGameObjInstNum++;
-
-							}
-						}
-
-					}
-
-				}
-
 
 			}
 
+
 		}
+
 	}
+	
 
 
 	
