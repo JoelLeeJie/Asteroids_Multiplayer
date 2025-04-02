@@ -51,8 +51,8 @@ prior written consent of DigiPen Institute of Technology is prohibited.
 #include <filesystem>
 #include "taskqueue.h"	
 
-#include "Utility.hpp"
-#include "Checksum.hpp"
+#include "..\Utility.hpp"
+#include "..\Checksum.hpp"
 #include <filesystem> //For file operations.
 #include <chrono> //for timeout timer.
 #include <thread> //to create a separate thread for file downloader.
