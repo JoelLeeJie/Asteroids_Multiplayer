@@ -1,6 +1,7 @@
 #include <main.h>
 #include "Client.hpp"
 #include "Main.h"
+#include "GameState_Asteroids.cpp"
 
 //Player transform(YT)
 
@@ -452,6 +453,14 @@ void Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, As
 		temp.time_of_creation = ntohf(temp.time_of_creation);
 
 		Asteroid_map[asteroid_ID] = temp;
+
+		// Set variables
+		AEVec2	sca = { temp.Scale_x, temp.Scale_y },
+				pos = { temp.Position_x, temp.Position_y },
+				vel = { temp.Velocity_x, temp.Velocity_y };
+
+		gameObjInstCreate(this_player.player_ID, asteroid_ID, TYPE_ASTEROID, &sca, &pos, &vel, 0.0f);
+		sGameObjInstNum++;
 	}
 }
 
@@ -485,9 +494,30 @@ void Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, 
 		std::memcpy(&obj_ID, &buffer[offset + 2], 4);
 		obj_ID = ntohl(obj_ID);
 
+		// Asteroid
+		int Asteroid_ID;
+		std::memcpy(&Asteroid_ID, &buffer[offset + 6], 4);
+		Asteroid_ID = ntohl(Asteroid_ID);
+
 		// Player
 		if (obj_ID == 0) {
 			// Player Response
+			//spShip->posCurr = spShip->posPrev = { 0, 0 };
+			//spShip->velCurr = { 0, 0 };
+			//sShipLives--;
+
+			// Resetting player
+			players[Player_ID].Position_X = 0.f;
+			players[Player_ID].Position_Y = 0.f;
+			players[Player_ID].Velocity_X = 0.f;
+			players[Player_ID].Velocity_Y = 0.f;
+			players[Player_ID].Acceleration_X = 0.f;
+			players[Player_ID].Acceleration_Y = 0.f;
+			
+			// Asteroid Response ( Deleting from Map )
+			Asteroid_map.erase(Asteroid_ID);
+			DestroyInstanceByID(Asteroid_ID, TYPE_ASTEROID);
+			onValueChange = true;
 		}
 		// Bullet
 		else if (obj_ID > 0) {
@@ -495,14 +525,12 @@ void Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, 
 			//players[Player_ID].score += amount;
 			int bulletID = obj_ID;
 			all_bullets[Player_ID].erase(bulletID);
-		}
-		// Asteroid
-		int Asteroid_ID;
-		std::memcpy(&Asteroid_ID, &buffer[offset + 6], 4);
-		Asteroid_ID = ntohl(Asteroid_ID);
 
-		// Asteroid Response ( Deleting from Map )
-		Asteroid_map.erase(Asteroid_ID);
+			// Asteroid Response ( Deleting from Map )
+			Asteroid_map.erase(Asteroid_ID);
+			DestroyInstanceByID(Asteroid_ID, TYPE_ASTEROID);
+			DestroyInstanceByID(obj_ID, TYPE_BULLET);
+		}
 	}
 }
 

@@ -141,8 +141,8 @@ extern std::vector<std::pair<unsigned int, unsigned int>> new_otherbullets; //li
 
 extern unsigned int bullet_ID; //start from 0
 // 
-//std::map<unsigned int, Asteroids> Asteroid_map 
-//std::vector<CollisionEvent> all_collisions;
+extern std::map<unsigned int, Asteroids> Asteroid_map;
+extern std::vector<CollisionEvent> all_collisions;
 
 
 std::string Write_PlayerTransform(Player player);

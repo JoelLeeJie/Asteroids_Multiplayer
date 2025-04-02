@@ -281,6 +281,8 @@ std::map<unsigned int, std::map<unsigned int, Bullet>> all_bullets;
 unsigned int bullet_ID = 1;
 std::vector<unsigned int> new_players;
 std::vector<std::pair<unsigned int, unsigned int>> new_otherbullets; //list of bullets created by other players
+std::map<unsigned int, Asteroids> Asteroid_map;
+std::vector<CollisionEvent> all_collisions;
 
 float get_TimeStamp() {
 	auto now = std::chrono::steady_clock::now();
@@ -724,14 +726,22 @@ void GameStateAsteroidsUpdate(void)
 						}
 					}
 					//Has collided or will collide within this frame. 
-					spShip->posCurr = spShip->posPrev = { 0, 0 };
-					spShip->velCurr = { 0, 0 };
-					sShipLives--;
-					gameObjInstDestroy(&gameObj1);
-					AddNewAsteroid();
-					sGameObjInstNum--;
-					sScore += 100;
-					onValueChange = true;
+					//spShip->posCurr = spShip->posPrev = { 0, 0 };
+					//spShip->velCurr = { 0, 0 };
+					//sShipLives--;
+					//gameObjInstDestroy(&gameObj1);
+					//AddNewAsteroid();
+					//sGameObjInstNum--;
+					//sScore += 100;
+					//onValueChange = true;
+
+					// Creating collision event
+					CollisionEvent temp{};
+					temp.asteroid_ID = gameObj1.Object_ID;
+					temp.object_ID = 0;
+					temp.timestamp = get_TimeStamp();
+					all_collisions.push_back(temp);
+
 					break;
 				case TYPE_BULLET:
 					//Static collision failed, check dynamic now.
@@ -745,15 +755,23 @@ void GameStateAsteroidsUpdate(void)
 					}
 					//Has collided or will collide within this frame. 
 					//delete both bullet and asteroid, then add 1-2 new asteroids.
-					gameObjInstDestroy(&gameObj1);
-					gameObjInstDestroy(&gameObj2);
-					sGameObjInstNum -= 2;
-					for (int k = 0; k < rand() % 2 + 1; k++)
-					{
-						AddNewAsteroid();
-					}
-					sScore += 100;
-					onValueChange = true;
+					//gameObjInstDestroy(&gameObj1);
+					//gameObjInstDestroy(&gameObj2);
+					//sGameObjInstNum -= 2;
+					//for (int k = 0; k < rand() % 2 + 1; k++)
+					//{
+					//	AddNewAsteroid();
+					//}
+					//sScore += 100;
+					//onValueChange = true;
+
+					// Creating collision event
+					CollisionEvent temp{};
+					temp.asteroid_ID = gameObj1.Object_ID;
+					temp.object_ID = gameObj2.Object_ID;
+					temp.timestamp = get_TimeStamp();
+					all_collisions.push_back(temp);
+
 					break;
 
 				default: continue; //If asteroid or wall, no need check collision.
@@ -908,8 +926,7 @@ void GameStateAsteroidsUpdate(void)
 
 	std::string player_transform = Write_PlayerTransform(players[this_player.player_ID]);
 	std::string player_bullets = Write_NewBullet(this_player.player_ID, new_bullets);
-
-
+	std::string player_collision = Write_AsteroidCollision(this_player.player_ID, all_collisions);
 
 
 	/////////////////////////////////////////////////////////
@@ -1316,8 +1333,25 @@ void gameObjInstDestroy(GameObjInst* pInst)
 	pInst->flag = 0;
 }
 
+void DestroyInstanceByID(int objectID, unsigned long type)
+{
+	for (unsigned long i = 0; i < GAME_OBJ_INST_NUM_MAX; ++i)
+	{
+		GameObjInst* pInst = &sGameObjInstList[i];
 
+		if ((pInst->flag & FLAG_ACTIVE) == 0)
+			continue;
 
+		if (pInst->pObject->type == type && pInst->Object_ID == objectID)
+		{
+			gameObjInstDestroy(pInst);
+			sGameObjInstNum--;
+			return;
+		}
+	}
+
+	std::cerr << "Warning: Object of type " << type << " with ID " << objectID << " not found.\n";
+}
 
 /******************************************************************************/
 /*!
