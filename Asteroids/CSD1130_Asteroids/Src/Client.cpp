@@ -33,12 +33,11 @@ std::string Write_PlayerTransform(Player player) {
 
 	//rev: ntohl
 	//semd: ht
-
 	// Create a string with at least 4 bytes
-	uint32_t Xpos = 0, Ypos = 0;
-	uint32_t Xvel = 0, Yvel = 0;
-	uint32_t Xacc = 0, Yacc = 0;
-	uint32_t rot = 0;
+	uint32_t Xpos, Ypos;
+	uint32_t Xvel, Yvel;
+	uint32_t Xacc, Yacc;
+	uint32_t rot;
 
 	std::memcpy(&Xpos, &player.Position_X, 4);
 	std::memcpy(&Ypos, &player.Position_Y, 4);
@@ -50,17 +49,14 @@ std::string Write_PlayerTransform(Player player) {
 	std::memcpy(&Yacc, &player.Acceleration_Y, 4);
 
 	std::memcpy(&rot, &player.Rotation, 4);
-
-
+	
+	
 	Xpos = htonl(Xpos);
 	Ypos = htonl(Ypos);
-
 	Xvel = htonl(Xvel);
 	Yvel = htonl(Yvel);
-
 	Xacc = htonl(Xacc);
 	Yacc = htonl(Yacc);
-
 	rot = htonl(rot);
 
 	std::string result(29, '\0');
@@ -74,6 +70,44 @@ std::string Write_PlayerTransform(Player player) {
 	std::memcpy(&result[17], &Xacc, 4);
 	std::memcpy(&result[21], &Yacc, 4);
 	std::memcpy(&result[25], &rot, 4);
+
+
+	/*std::cout << "before: =============================\n";
+	std::cout << "POS: x: " << player.Position_X << " y: " << player.Position_Y << std::endl;
+	std::cout << "VEL: x: " << player.Velocity_X << " y: " << player.Velocity_Y << std::endl;
+	std::cout << "rotation: " << player.Rotation << std::endl;
+
+	std::memcpy(&Xpos, &result[1], 4);
+	std::memcpy(&Ypos, &result[5], 4);
+	std::memcpy(&Xvel, &result[9], 4);
+	std::memcpy(&Yvel, &result[13], 4);
+	std::memcpy(&Xacc, &result[17], 4);
+	std::memcpy(&Yacc, &result[21], 4);
+	std::memcpy(&rot, &result[25], 4);
+
+	Xpos = ntohl(Xpos);
+	Ypos = ntohl(Ypos);
+	Xvel = ntohl(Xvel);
+	Yvel = ntohl(Yvel);
+	Xacc = ntohl(Xacc);
+	Yacc = ntohl(Yacc);
+	rot = ntohl(rot);
+
+	float posX, posY, velX, velY, accX, accY, rot2;
+	std::memcpy(&posX, &Xpos, 4);
+	std::memcpy(&posY, &Ypos, 4);
+	std::memcpy(&velX, &Xvel, 4);
+	std::memcpy(&velY, &Yvel, 4);
+	std::memcpy(&accX, &Xacc, 4);
+	std::memcpy(&accY, &Yacc, 4);
+	std::memcpy(&rot2, &rot, 4);
+
+	std::cout << "after: =============================\n";
+	std::cout << "POS: x: " << posX << " y: " << posY << std::endl;
+	std::cout << "VEL: x: " << velX << " y: " << velY << std::endl;
+	std::cout << "rotation: " << rot2 << std::endl;*/
+
+
 
 	return result;
 
@@ -231,10 +265,15 @@ std::string Write_NewBullet(unsigned int session_ID, std::map<unsigned int, Bull
 		std::memcpy(&result[offset + 20], &time_stamp, 4);
 		std::memcpy(&result[offset + 24], &bullet_id, 4);
 
+		
+
 		j++;
 
 
 	}
+
+	//std::cout << "new bullets size: " << new_bullets.size() << std::endl;
+
 	//after creating, remove the bullets to be created. to avoid duplication
 	new_bullets.clear();
 
@@ -814,7 +853,7 @@ void HandleReceivedPackets(std::string data, int seq_or_ack_number)
 	{
 		//Message format: [General Command = COMMAND][Command ID]...[Command ID 2]
 		std::lock_guard<std::mutex> player_lock{ this_player_lock };
-		
+
 		//==Check if it's a new message, by comparing packet number with the last successful packet.
 		if (this_player.reliable_transfer.ack_last_packet_received >= seq_or_ack_number) return;
 		//it's a new packet, so update the stored ack number.
@@ -879,7 +918,7 @@ void ReceiveSendMessages()
 			//Below here, packet is to be sent.
 			std::string message_to_send = session.messages_to_send.front();
 			//Don't pop, unless ACK'd.
-			
+
 			//Add sequence number to the send.
 			uint32_t network_sequence_number = htonl(session.reliable_transfer.current_sequence_number);
 			char number_buffer[4]{};
