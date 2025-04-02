@@ -167,8 +167,31 @@ std::mutex packet_queue_lock{};
 //Indicates if the game has ended, so0 the multi-threaded functions can end too.
 bool isGameRunning{ true };
 
+// asteroid collision and player transform data structs
+struct PlayerTransform {
+	float Position_X, Position_Y;
+	float Velocity_X, Velocity_Y;
+	float Acceleration_X, Acceleration_Y;
+	float Rotation;
+};
+
+struct AsteroidCollision {
+	unsigned int playerID;
+	unsigned int objectID;
+	unsigned int asteroidID;
+	float timestamp;
+};
+
+std::map<unsigned int, PlayerTransform> playerTransforms;
+std::map<unsigned int, AsteroidCollision> asteroidCollisions;
+
 //Forward declarations:
 //void HandleStartGame();
+void ReadPlayerTransforms(std::istream& input, unsigned short playerID);
+void WritePlayerTransforms(std::ostream& output);
+void ReadAsteroidCollisions(std::istream& input, unsigned short playerID);
+void WriteAsteroidCollision(std::ostream& output);
+
 
 
 /*
@@ -197,6 +220,23 @@ void GameProgram()
 		*/
 		//==Ensure all messages received and ACK'd.
 		//ReceiveAllMessages();
+		std::lock_guard<std::mutex> map_lock{ session_map_lock };
+		for (auto& [playerID, session] : player_Session_Map) {
+			std::ostringstream output;
+
+			// Write player transforms
+			output.put(SERVER_PLAYER_TRANSFORM);
+			WritePlayerTransforms(output);
+
+			// Write asteroid collisions
+			output.put(SERVER_COLLISION);
+			WriteAsteroidCollision(output);
+
+			// Send the combined message
+			session.SendLongMessage(output.str());
+		}
+
+
 
 	}
 }
@@ -329,6 +369,102 @@ void GameProgram()
 //		
 //	}
 //}
+
+/*
+	\brief
+	Reads player transform data from input stream and updates player information
+*/
+void ReadPlayerTransforms(std::istream& input, unsigned short playerID) {
+	unsigned short numPlayers = 0;
+	input.read(reinterpret_cast<char*>(&numPlayers), sizeof(unsigned short));
+
+	for (unsigned short i = 0; i < numPlayers; ++i) {
+		unsigned int transformPlayerID;
+		PlayerTransform transform;
+
+		input.read(reinterpret_cast<char*>(&transformPlayerID), sizeof(unsigned int));
+		input.read(reinterpret_cast<char*>(&transform.Position_X), sizeof(float));
+		input.read(reinterpret_cast<char*>(&transform.Position_Y), sizeof(float));
+		input.read(reinterpret_cast<char*>(&transform.Velocity_X), sizeof(float));
+		input.read(reinterpret_cast<char*>(&transform.Velocity_Y), sizeof(float));
+		input.read(reinterpret_cast<char*>(&transform.Acceleration_X), sizeof(float));
+		input.read(reinterpret_cast<char*>(&transform.Acceleration_Y), sizeof(float));
+		input.read(reinterpret_cast<char*>(&transform.Rotation), sizeof(float));
+
+		playerTransforms[transformPlayerID] = transform;
+	}
+}
+
+/*
+	\brief
+	Writes all player transform data to output stream
+*/
+void WritePlayerTransforms(std::ostream& output) {
+	std::lock_guard<std::mutex> map_lock{ session_map_lock };
+	unsigned short numPlayers = static_cast<unsigned short>(player_Session_Map.size());
+	output.write(reinterpret_cast<const char*>(&numPlayers), sizeof(unsigned short));
+
+	for (const auto& [playerID, session] : player_Session_Map) {
+		// In a real implementation, you would write actual player transform data here
+		// For now, we just write the player ID as placeholder
+		output.write(reinterpret_cast<const char*>(&playerID), sizeof(unsigned int));
+
+		// Placeholder data - replace with actual transform data from your game state
+		float posX = 0.0f, posY = 0.0f;
+		float velX = 0.0f, velY = 0.0f;
+		float accX = 0.0f, accY = 0.0f;
+		float rotation = 0.0f;
+
+		output.write(reinterpret_cast<const char*>(&posX), sizeof(float));
+		output.write(reinterpret_cast<const char*>(&posY), sizeof(float));
+		output.write(reinterpret_cast<const char*>(&velX), sizeof(float));
+		output.write(reinterpret_cast<const char*>(&velY), sizeof(float));
+		output.write(reinterpret_cast<const char*>(&accX), sizeof(float));
+		output.write(reinterpret_cast<const char*>(&accY), sizeof(float));
+		output.write(reinterpret_cast<const char*>(&rotation), sizeof(float));
+	}
+}
+
+/*
+	\brief
+	Reads asteroid collision data from input stream
+*/
+void ReadAsteroidCollisions(std::istream& input, unsigned short playerID) {
+	unsigned short numCollisions;
+	input.read(reinterpret_cast<char*>(&numCollisions), sizeof(unsigned short));
+
+	for (unsigned short i = 0; i < numCollisions; ++i) {
+		unsigned int objectID, asteroidID;
+		float timestamp;
+
+		input.read(reinterpret_cast<char*>(&objectID), sizeof(unsigned int));
+		input.read(reinterpret_cast<char*>(&asteroidID), sizeof(unsigned int));
+		input.read(reinterpret_cast<char*>(&timestamp), sizeof(float));
+
+		// Store collision data (implementation depends on your game state)
+		// This would typically go into a map or queue for processing
+	}
+}
+
+/*
+	\brief
+	Writes asteroid collision data to output stream
+*/
+void WriteAsteroidCollision(std::ostream& output) {
+	// In a real implementation, you would determine which collisions occurred
+	// For now, we'll just write a single placeholder collision
+
+	unsigned short numCollisions = 1; // Placeholder - should be actual number of collisions
+	output.write(reinterpret_cast<const char*>(&numCollisions), sizeof(unsigned short));
+
+	// Placeholder data - replace with actual collision data
+	unsigned int playerID = 1, asteroidID = 1;
+	float timestamp = static_cast<float>(GetTime());
+
+	output.write(reinterpret_cast<const char*>(&playerID), sizeof(unsigned int));
+	output.write(reinterpret_cast<const char*>(&asteroidID), sizeof(unsigned int));
+	output.write(reinterpret_cast<const char*>(&timestamp), sizeof(float));
+}
 
 namespace {
 	//Just used to shift writing of socket to outside the map, to prevent locking of 2 mutexes (which may lead to deadlock if not done well).
@@ -525,10 +661,18 @@ void HandleReceivedPackets()
 			continue; //Handling of packet finished.
 		}
 		//==Below here, it is a non-ACK packet (i.e. command).
+		if (command_ID == CLIENT_PLAYER_TRANSFORM) 
+		{
+			std::istringstream input(packet.data.substr(1));
+			//ReadPlayerTransforms(input, packet.seq_or_ack_number);
+			ReadPlayerTransforms(input, packet.seq_or_ack_number);
 
-
-
-
+		}
+		else if (command_ID == CLIENT_COLLISION) 
+		{
+			std::istringstream input(packet.data.substr(1));
+			ReadAsteroidCollisions(input, packet.seq_or_ack_number);
+		}
 		/*
 			Two scenarios
 			1. Player looking to join --> [General Command ID] only
@@ -671,6 +815,10 @@ void HandleReceivedPackets()
 		}
 	}
 }
+
+// 
+
+
 
 /*
 	\brief
