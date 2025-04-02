@@ -77,6 +77,8 @@ std::string Write_PlayerTransform(Player player) {
 
 	return result;
 
+	//return std::string("Hello ");
+
 	// To verify (optional): print each byte in hex
 	/*for (unsigned char c : Xpos) {
 		printf("%02X ", c);
@@ -237,7 +239,7 @@ std::string Write_NewBullet(unsigned int session_ID, std::map<unsigned int, Bull
 	new_bullets.clear();
 
 	return result;
-
+	//return std::string("World\n");
 }
 
 
