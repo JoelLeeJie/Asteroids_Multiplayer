@@ -73,14 +73,16 @@ std::string Write_PlayerTransform(Player player) {
 
 }
 
-void Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& player_map, std::vector<unsigned int>& players_to_create) {
+int Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& player_map, std::vector<unsigned int>& players_to_create) {
 
 	if (buffer.empty()) {
 
 		std::cout << "Read_PlayersTransform: buffer is empty!\n";
 
-		return;
+		return 0;
 	}
+
+	int bytes_read = 0;
 
 	char ID_Dump = buffer[0];
 
@@ -88,6 +90,8 @@ void Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& p
 	uint16_t num_players = 0;
 	std::memcpy(&num_players, &buffer[1], 2);
 	num_players = ntohs(num_players);
+
+	bytes_read = 3;
 
 	for (int i = 0; i < (int)num_players; i++) {
 
@@ -146,8 +150,13 @@ void Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& p
 
 		}
 
+		bytes_read += 30;
+
 
 	}
+	std::cout << "Read_PlayersTransform | bytes read: " << bytes_read << std::endl;
+
+	return bytes_read;
 
 }
 
@@ -220,14 +229,16 @@ std::string Write_NewBullet(unsigned int session_ID, std::map<unsigned int, Bull
 
 
 
-void Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>& bullets_map, std::map<unsigned int, Player> player_map, std::vector<std::pair<unsigned int, unsigned int>>& other_bullets) {
+int Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>& bullets_map, std::map<unsigned int, Player> player_map, std::vector<std::pair<unsigned int, unsigned int>>& other_bullets) {
 
 	if (buffer.empty()) {
 
 		std::cout << "Read_New_Bullets: buffer is empty!\n";
 
-		return;
+		return 0;
 	}
+
+	int bytes_read = 0;
 
 	char ID_Dump = buffer[0];
 
@@ -236,6 +247,8 @@ void Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsign
 	num_players = ntohs(num_players);
 
 	int offset = 3;
+
+	bytes_read = 3;
 
 
 	for (int i = 0; i < (int)num_players; i++) {
@@ -251,7 +264,7 @@ void Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsign
 		num_bullets = ntohs(num_bullets);
 
 		offset += 4; //if bullet num =1, offset here should be 7
-
+		bytes_read += 4;
 
 		for (int j = 0; j < (int)num_bullets; j++) {
 
@@ -269,6 +282,7 @@ void Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsign
 			std::memcpy(&time_stamp, &buffer[offset + 24], 4);
 
 			offset += 28;
+			bytes_read += 28;
 
 			Xpos = ntohl(Xpos);
 			Ypos = ntohl(Ypos);
@@ -297,7 +311,7 @@ void Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsign
 				if (it->second.find(static_cast<unsigned int>(bullet_id)) == it->second.end()) {
 
 					it->second[static_cast<unsigned int>(bullet_id)] = new_bullet;
-
+					other_bullets.push_back(std::pair<unsigned int, unsigned int>(player_ID, bullet_id));
 				}
 
 			}
@@ -330,6 +344,8 @@ void Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsign
 		}
 
 	}
+	std::cout << "Read_New_Bullets | bytes read: " << bytes_read << std::endl;
+	return bytes_read;
 
 }
 
