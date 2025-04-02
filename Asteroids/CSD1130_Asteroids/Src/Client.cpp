@@ -533,8 +533,8 @@ int InitializeUDP()
 {
 	std::string server_ip{};
 	std::string server_udp_portString{}, client_udp_portString{};
-
-	// Get IP Address
+	std::ifstream config_file{ "Config.txt" };
+	// Get Server IP Address
 	std::cout << "Server IP Address: ";
 	std::getline(std::cin, server_ip);
 

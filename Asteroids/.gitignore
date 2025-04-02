@@ -1,0 +1,8 @@
+.tmp/
+.vs/
+# /folder/ to ignore the folder (last /) only within the current directory and not any subdirectories(leading /) to allow inclusion of library files. 
+/CSD1130_Asteroids/x64/Debug/*
+/CSD1130_Asteroids/x64/Release/*
+/Bin/*
+#Keep dll files.
+!/Bin/*.dll

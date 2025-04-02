@@ -234,7 +234,7 @@ void GameProgram()
 			Structure of Program:
 			It first receives the message, and checks which client sent it (session ID).
 			It then waits for other clients, then after all clients are done it checks for a few things.
-			It stops waiting after a few seconds, and clients who haven’t responded back means they disconnected, so remove them from client list and don’t wait for them.
+			It stops waiting after a few seconds, and clients who havenï¿½t responded back means they disconnected, so remove them from client list and donï¿½t wait for them.
 			Check who collided with asteroid first, based on their sent timestamps.
 			Send message back to clients
 			- New player transforms (from other players).

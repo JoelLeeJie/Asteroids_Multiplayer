@@ -38,9 +38,7 @@ int WINAPI WinMain(HINSTANCE instanceH, HINSTANCE prevInstanceH, LPSTR command_l
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
 
-	int returnVal = InitializeUDP();
-	if (returnVal != 10) return returnVal;
-	std::thread thread_that_handles_receiving_sending_messages(ReceiveSendMessages);
+	
 
 	// Initialize the system
 	AESysInit(instanceH, show, 800, 600, 1, 60, false, NULL);
@@ -54,7 +52,13 @@ int WINAPI WinMain(HINSTANCE instanceH, HINSTANCE prevInstanceH, LPSTR command_l
 	/*
 		Contact Server to add as player.
 	*/
-
+	int returnVal = InitializeUDP();
+	if (returnVal != 10)
+	{
+		AESysExit();
+		return returnVal;
+	}
+	std::thread thread_that_handles_receiving_sending_messages(ReceiveSendMessages);
 
 	GameStateMgrInit(GS_ASTEROIDS);
 
