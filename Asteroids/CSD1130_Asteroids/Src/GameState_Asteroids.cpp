@@ -25,6 +25,7 @@ prior written consent of DigiPen Institute of Technology is prohibited.
 #include <iostream>
 #include <queue>
 #include <sstream>
+#include <limits>
 
 /******************************************************************************/
 /*!
@@ -55,6 +56,8 @@ const float			SHIP_ROT_SPEED = (2.0f * PI);	// ship rotation speed (degree/secon
 const float			BULLET_SPEED = 400.0f;		// bullet speed (m/s)
 
 const float         BOUNDING_RECT_SIZE = 1.0f;         // this is the normalized bounding rectangle (width and height) sizes - AABB collision data
+
+const float			MAX_FLOAT_VALUE = 3.402823466e+38F;
 
 // Constants
 constexpr float epsilon = 0.001f;
@@ -142,6 +145,10 @@ static unsigned long		sScore;										// Current score
 
 static bool runGame;
 
+
+
+// asteroid collision data map
+static std::map<unsigned short, std::map<unsigned int, float>> asteroidCollisionMap;
 
 
 // ---------------------------------------------------------------------------
@@ -1377,6 +1384,8 @@ void Helper_Wall_Collision()
 		}
 	}
 }
+
+
 
 
 

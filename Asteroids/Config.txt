@@ -1,3 +1,3 @@
-Server_IP_Address: 10.132.16.101
+Server_IP_Address: 192.168.50.250
 Server_Port_Number: 1234
 Client_Port_Number: 4567
