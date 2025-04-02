@@ -215,7 +215,13 @@ std::mutex packet_queue_lock{};
 //Indicates if the game has ended, so0 the multi-threaded functions can end too.
 bool isGameRunning{ true };
 
-//nForward declarations:
+//Forward declarations:
+
+void ReadBullet(std::istream& input, unsigned short playerID);
+void WriteBullet(std::ostream& output);
+void CreateNewAsteroid();
+void WriteBullet(std::ostream& output);
+
 //void HandleStartGame();
 
 // ------------------------------------------------Entry Point--------------------------------------------------------
@@ -257,7 +263,44 @@ void GameProgram()
 			- Asteroid destruction (who destroyed what).
 		*/
 		//==Ensure all messages received and ACK'd.
-		//ReceiveAllMessages();
+
+		// Receive message from clients
+		{
+			std::lock_guard<std::mutex> map_lock{ session_map_lock };
+			for (auto& player_pair : player_Session_Map) {
+				if (!player_pair.second.is_recv_message_complete) {
+					continue;
+				}
+				char commandID;
+				std::stringstream msgStream(player_pair.second.recv_buffer);
+				msgStream.read(reinterpret_cast<char*>(&commandID), sizeof(char));
+				switch (commandID) {
+				case CLIENT_BULLET_CREATION:
+					ReadBullet(msgStream, player_pair.first);
+					break;
+				default:
+					break;
+				}
+				player_pair.second.recv_buffer.clear();
+				player_pair.second.is_recv_message_complete = false;
+			}
+		}
+
+		// Send Message to client 
+		{
+			std::ostringstream messageStream(std::ios::binary);
+
+			// Compose message content
+			WriteBullet(messageStream);
+			WriteNewAsteroids(messageStream);
+
+			std::string message = messageStream.str();
+
+			std::lock_guard<std::mutex> map_lock{ session_map_lock };
+			for (auto& [_, session] : player_Session_Map) {
+				session.SendLongMessage(message);  // queues packet for reliable sending
+			}
+		}
 
 	}
 }
@@ -936,11 +979,14 @@ format:
 /******************************************************************************/
 void WriteBullet(std::ostream& output)
 {
+	output.write(reinterpret_cast<const char*>(SERVER_BULLET_CREATION), sizeof(char));
+
+	unsigned short numPlayers = static_cast<unsigned short>(currentPlayers.size());
+	output.write(reinterpret_cast<const char*>(&numPlayers), sizeof(unsigned short));
 
 	for (const auto& [playerID, bullets] : bulletMap)
 	{
 		output.write(reinterpret_cast<const char*>(&playerID), sizeof(unsigned short));
-
 		unsigned short numBullets = static_cast<unsigned short>(bullets.size());
 		output.write(reinterpret_cast<const char*>(&numBullets), sizeof(unsigned short));
 
