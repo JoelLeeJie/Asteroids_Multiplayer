@@ -243,6 +243,7 @@ void GameProgram()
 	//HandleStartGame();
 	while (isGameRunning)
 	{
+		
 		/*
 			Structure of Program:
 			It first receives the message, and checks which client sent it (session ID).

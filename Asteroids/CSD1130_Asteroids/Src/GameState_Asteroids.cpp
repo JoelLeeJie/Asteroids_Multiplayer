@@ -860,7 +860,7 @@ void GameStateAsteroidsUpdate(void)
 
 			int bytes_read = 0;
 
-			while (bytes_read <= this_player.recv_buffer.size()) {
+			while (bytes_read < this_player.recv_buffer.size()) {
 
 				uint8_t Command_ID = this_player.recv_buffer[bytes_read]; //lets say 0
 				bytes_read += 1;

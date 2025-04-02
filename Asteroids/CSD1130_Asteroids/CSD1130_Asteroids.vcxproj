@@ -122,8 +122,8 @@
       <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /y $(SolutionDir)Config.txt  $(ProjectDir)
-xcopy /y $(SolutionDir)Config.txt  $(OutDirFullPath)</Command>
+      <Command>xcopy /y "$(SolutionDir)Config.txt"  "$(ProjectDir)"
+xcopy /y "$(SolutionDir)Config.txt"  "$(OutDirFullPath)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -171,8 +171,8 @@ xcopy /y $(SolutionDir)Config.txt  $(OutDirFullPath)</Command>
       <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /y $(SolutionDir)Config.txt  $(ProjectDir)
-xcopy /y $(SolutionDir)Config.txt  $(OutDirFullPath)</Command>
+      <Command>xcopy /y "$(SolutionDir)Config.txt"  "$(ProjectDir)"
+xcopy /y "$(SolutionDir)Config.txt"  "$(OutDirFullPath)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
