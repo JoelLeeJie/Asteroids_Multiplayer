@@ -557,9 +557,13 @@ void GameStateAsteroidsUpdate(void)
 		bullet.Time_Stamp = get_TimeStamp();
 
 		new_bullets[bullet_ID] = bullet; //add it to the new bullet map to send to server
-		all_bullets[this_player.player_ID][bullet_ID] = bullet; //add it to the the all_bullet map
-
+		all_bullets[this_player.player_ID][bullet_ID] = bullet; //add it to the the all_bullet map		
 		bullet_ID++;
+
+		{//just for printing
+			std::lock_guard<std::mutex> player_lock{ this_player_lock };
+			std::cout << "YAY NEW BULLET: bullet size: " << new_bullets.size() << std::endl;
+		}
 
 	}
 
@@ -838,8 +842,13 @@ void GameStateAsteroidsUpdate(void)
 		std::lock_guard<std::mutex> player_lock{ this_player_lock };
 		std::string message_to_SERVER{};
 		message_to_SERVER += Write_PlayerTransform(players[this_player.player_ID]);
-		message_to_SERVER += Write_NewBullet(this_player.player_ID, new_bullets);
-		message_to_SERVER += Write_AsteroidCollision(this_player.player_ID, all_collisions);
+
+
+		if (new_bullets.size()) {
+			message_to_SERVER += Write_NewBullet(this_player.player_ID, new_bullets);
+		}
+
+		
 
 		//std::cout << message_to_SERVER.c_str();
 
@@ -1231,7 +1240,8 @@ GameObjInst* gameObjInstCreate(int player_id, int object_id, unsigned long type,
 			pInst->Player_ID = player_id;
 
 			if (player_id == -1) {
-				PrintString("OMG, the player ID is 0 means does not Exist");
+				PrintString("OMG, the player ID is -1 means does not Exist");
+				player_id = 28; //randomely assign first
 			}
 
 			if (object_id == -1) {
