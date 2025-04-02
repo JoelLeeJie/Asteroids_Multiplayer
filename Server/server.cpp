@@ -242,6 +242,7 @@ void GameProgram()
 {
 	//Wait for players to join.
 	HandleStartGame();
+	PrintString("Game Started\n");
 	while (isGameRunning)
 	{
 
@@ -270,7 +271,8 @@ void GameProgram()
 */
 void HandleStartGame()
 {
-	while (true)
+	bool isStartGame = false;
+	while (!isStartGame)
 	{
 		/*
 			Loops until a player sends a start command.
@@ -286,12 +288,20 @@ void HandleStartGame()
 				if (!session.is_recv_message_complete || session.recv_buffer.empty()) continue;
 				char command_ID = session.recv_buffer[0];
 				//See if the command received is a start command.
-				if (command_ID != START_GAME) continue;
+				if (command_ID != START_GAME)
+				{
+					//There shouldn't be any command that is not start game, so this is jic.
+					session.recv_buffer.clear();
+					//Since buffer is cleared.
+					session.is_recv_message_complete = false;
+					continue;
+				}
 				/*
 					Start game command received from one player, so send to every player for them to start.
 					Clear all the recvbuffers as well.
 					Set isStart to true.
 				*/
+				isStartGame = true;
 				break;
 			}
 		}

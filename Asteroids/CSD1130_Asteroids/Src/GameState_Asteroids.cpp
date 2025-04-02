@@ -394,6 +394,7 @@ void GameStateAsteroidsInit(void)
 	//Write_To_Socket(client_socket, message.size(), message.data());
 
 	/////////////////////////////////////////
+	
 }
 
 /******************************************************************************/
@@ -403,6 +404,48 @@ void GameStateAsteroidsInit(void)
 /******************************************************************************/
 void GameStateAsteroidsUpdate(void)
 {
+	static bool isGameStarted = false;
+	static bool pressStartOnce = false;
+	/*
+		Wait for the game to start.
+	*/
+	if (!isGameStarted)
+	{
+		std::lock_guard<std::mutex> player_lock{ this_player_lock };
+		//Press spacebar to send START_GAME command.
+		if (AEInputCheckTriggered(AEVK_SPACE) && runGame == true && !pressStartOnce)
+		{
+			//Only send the start command once.
+			pressStartOnce = true;
+			//Send a Start Command to server when space is pressed.
+			std::string start_game{ (char)START_GAME };
+			this_player.SendLongMessage(start_game);
+		}
+		//==Check for a START_GAME command from server.
+		//No message received yet.
+		if (!this_player.is_recv_message_complete || this_player.recv_buffer.empty())
+		{
+			//So it doesn't hog the mutex while spinlocking.
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			return;
+		}
+		//Message received, check if it's the command.
+		char command_ID = this_player.recv_buffer[0];
+		if (command_ID != START_GAME)
+		{
+			//There shouldn't be any command that is not start game, so this is just in case.
+			this_player.recv_buffer.clear();
+			//Since buffer is cleared.
+			this_player.is_recv_message_complete = false;
+			return;
+		}
+		//Start game command received, clear buffers to ensure game starts afresh.
+		this_player.recv_buffer.clear();
+		//Since buffer is cleared.
+		this_player.is_recv_message_complete = false;
+		isGameStarted = true;
+	}
+
 	// =========================================================
 	// update according to input
 	// =========================================================
