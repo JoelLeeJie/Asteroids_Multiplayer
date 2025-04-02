@@ -197,7 +197,6 @@ std::mutex session_map_lock{};
 std::array<unsigned char, 4> server_ip_addr{}; // Server information, set and forget in main().
 std::map<unsigned short, std::vector<Bullet>> bulletMap; // map to store bullet, asteroid and player info
 std::queue<Asteroids> newAsteroidQueue;
-std::vector<Player> currentPlayers;
 std::queue<Packet> packet_recv_queue{}; // For temporarily storing packets received.
 
 // Global vars
@@ -293,26 +292,6 @@ void GameProgram()
 		*/
 		//==Ensure all messages received and ACK'd.
 		//ReceiveAllMessages();
-		std::lock_guard<std::mutex> map_lock{ session_map_lock };
-		for (auto& [playerID, session] : player_Session_Map) {
-			std::ostringstream output;
-
-			// Write player transforms
-			output.put(SERVER_PLAYER_TRANSFORM);
-			WritePlayerTransforms(output);
-
-			// Write asteroid collisions
-			output.put(SERVER_COLLISION);
-			WriteAsteroidCollision(output);
-
-			// Send the combined message
-			session.SendLongMessage(output.str());
-		}
-
-
-
-	//}
-//}
 
 		auto now = Clock::now();
 		auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastAsteroidSpawn);
@@ -322,6 +301,8 @@ void GameProgram()
 				CreateNewAsteroid();
 			lastAsteroidSpawn = now;
 		}
+
+		
 
 		// Receive message from clients
 		{
@@ -337,6 +318,10 @@ void GameProgram()
 				case CLIENT_BULLET_CREATION:
 					ReadBullet(msgStream, player_pair.first);
 					break;
+				case CLIENT_PLAYER_TRANSFORM:
+					ReadPlayerTransforms(msgStream, player_pair.first);
+				case CLIENT_COLLISION:
+					ReadAsteroidCollisions(msgStream, player_pair.first);
 				default:
 					break;
 				}
@@ -352,6 +337,8 @@ void GameProgram()
 			// Compose message content
 			WriteBullet(messageStream);
 			WriteNewAsteroids(messageStream);
+			WritePlayerTransforms(messageStream);
+			WriteAsteroidCollision(messageStream);
 
 			std::string message = messageStream.str();
 
@@ -485,102 +472,6 @@ void HandleStartGame()
 //		
 //	}
 //}
-
-/*
-	\brief
-	Reads player transform data from input stream and updates player information
-*/
-void ReadPlayerTransforms(std::istream& input, unsigned short playerID) {
-	unsigned short numPlayers = 0;
-	input.read(reinterpret_cast<char*>(&numPlayers), sizeof(unsigned short));
-
-	for (unsigned short i = 0; i < numPlayers; ++i) {
-		unsigned int transformPlayerID;
-		PlayerTransform transform;
-
-		input.read(reinterpret_cast<char*>(&transformPlayerID), sizeof(unsigned int));
-		input.read(reinterpret_cast<char*>(&transform.Position_X), sizeof(float));
-		input.read(reinterpret_cast<char*>(&transform.Position_Y), sizeof(float));
-		input.read(reinterpret_cast<char*>(&transform.Velocity_X), sizeof(float));
-		input.read(reinterpret_cast<char*>(&transform.Velocity_Y), sizeof(float));
-		input.read(reinterpret_cast<char*>(&transform.Acceleration_X), sizeof(float));
-		input.read(reinterpret_cast<char*>(&transform.Acceleration_Y), sizeof(float));
-		input.read(reinterpret_cast<char*>(&transform.Rotation), sizeof(float));
-
-		playerTransforms[transformPlayerID] = transform;
-	}
-}
-
-/*
-	\brief
-	Writes all player transform data to output stream
-*/
-void WritePlayerTransforms(std::ostream& output) {
-	std::lock_guard<std::mutex> map_lock{ session_map_lock };
-	unsigned short numPlayers = static_cast<unsigned short>(player_Session_Map.size());
-	output.write(reinterpret_cast<const char*>(&numPlayers), sizeof(unsigned short));
-
-	for (const auto& [playerID, session] : player_Session_Map) {
-		// In a real implementation, you would write actual player transform data here
-		// For now, we just write the player ID as placeholder
-		output.write(reinterpret_cast<const char*>(&playerID), sizeof(unsigned int));
-
-		// Placeholder data - replace with actual transform data from your game state
-		float posX = 0.0f, posY = 0.0f;
-		float velX = 0.0f, velY = 0.0f;
-		float accX = 0.0f, accY = 0.0f;
-		float rotation = 0.0f;
-
-		output.write(reinterpret_cast<const char*>(&posX), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&posY), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&velX), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&velY), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&accX), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&accY), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&rotation), sizeof(float));
-	}
-}
-
-/*
-	\brief
-	Reads asteroid collision data from input stream
-*/
-void ReadAsteroidCollisions(std::istream& input, unsigned short playerID) {
-	unsigned short numCollisions;
-	input.read(reinterpret_cast<char*>(&numCollisions), sizeof(unsigned short));
-
-	for (unsigned short i = 0; i < numCollisions; ++i) {
-		unsigned int objectID, asteroidID;
-		float timestamp;
-
-		input.read(reinterpret_cast<char*>(&objectID), sizeof(unsigned int));
-		input.read(reinterpret_cast<char*>(&asteroidID), sizeof(unsigned int));
-		input.read(reinterpret_cast<char*>(&timestamp), sizeof(float));
-
-		// Store collision data (implementation depends on your game state)
-		// This would typically go into a map or queue for processing
-	}
-}
-
-/*
-	\brief
-	Writes asteroid collision data to output stream
-*/
-void WriteAsteroidCollision(std::ostream& output) {
-	// In a real implementation, you would determine which collisions occurred
-	// For now, we'll just write a single placeholder collision
-
-	unsigned short numCollisions = 1; // Placeholder - should be actual number of collisions
-	output.write(reinterpret_cast<const char*>(&numCollisions), sizeof(unsigned short));
-
-	// Placeholder data - replace with actual collision data
-	unsigned int playerID = 1, asteroidID = 1;
-	float timestamp = static_cast<float>(GetTime());
-
-	output.write(reinterpret_cast<const char*>(&playerID), sizeof(unsigned int));
-	output.write(reinterpret_cast<const char*>(&asteroidID), sizeof(unsigned int));
-	output.write(reinterpret_cast<const char*>(&timestamp), sizeof(float));
-}
 
 namespace {
 	//Just used to shift writing of socket to outside the map, to prevent locking of 2 mutexes (which may lead to deadlock if not done well).
@@ -779,19 +670,7 @@ void HandleReceivedPackets()
 			if (!session.messages_to_send.empty()) session.reliable_transfer.toSend = true;
 			continue; //Handling of packet finished.
 		}
-		//==Below here, it is a non-ACK packet (i.e. command).
-		if (command_ID == CLIENT_PLAYER_TRANSFORM) 
-		{
-			std::istringstream input(packet.data.substr(1));
-			//ReadPlayerTransforms(input, packet.seq_or_ack_number);
-			ReadPlayerTransforms(input, packet.seq_or_ack_number);
-
-		}
-		else if (command_ID == CLIENT_COLLISION) 
-		{
-			std::istringstream input(packet.data.substr(1));
-			ReadAsteroidCollisions(input, packet.seq_or_ack_number);
-		}
+		
 		/*
 			Two scenarios
 			1. Player looking to join --> [General Command ID] only
@@ -1102,24 +981,31 @@ format: everything after command id
 /******************************************************************************/
 void ReadBullet(std::istream& input, unsigned short playerID)
 {
-	unsigned short numBullets = 0;
-	input.read(reinterpret_cast<char*>(&numBullets), sizeof(unsigned short));
+	uint16_t numBulletsNet = 0;
+	input.read(reinterpret_cast<char*>(&numBulletsNet), sizeof(uint16_t));
+	uint16_t numBullets = ntohs(numBulletsNet);
 
 	for (int i = 0; i < numBullets; ++i)
 	{
-		int objectID;
-		float posX, posY;
-		float velX, velY;
-		float rotation;
-		float timestamp;
+		uint32_t netObjectID, netPosX, netPosY, netVelX, netVelY, netRotation, netTimestamp;
 
-		input.read(reinterpret_cast<char*>(&objectID), sizeof(int));
-		input.read(reinterpret_cast<char*>(&posX), sizeof(float));
-		input.read(reinterpret_cast<char*>(&posY), sizeof(float));
-		input.read(reinterpret_cast<char*>(&velX), sizeof(float));
-		input.read(reinterpret_cast<char*>(&velY), sizeof(float));
-		input.read(reinterpret_cast<char*>(&rotation), sizeof(float));
-		input.read(reinterpret_cast<char*>(&timestamp), sizeof(float));
+		input.read(reinterpret_cast<char*>(&netObjectID), sizeof(uint32_t));
+		input.read(reinterpret_cast<char*>(&netPosX), sizeof(uint32_t));
+		input.read(reinterpret_cast<char*>(&netPosY), sizeof(uint32_t));
+		input.read(reinterpret_cast<char*>(&netVelX), sizeof(uint32_t));
+		input.read(reinterpret_cast<char*>(&netVelY), sizeof(uint32_t));
+		input.read(reinterpret_cast<char*>(&netRotation), sizeof(uint32_t));
+		input.read(reinterpret_cast<char*>(&netTimestamp), sizeof(uint32_t));
+
+		int objectID = ntohl(netObjectID);
+		float posX, posY, velX, velY, rotation, timestamp;
+
+		netPosX = ntohl(netPosX); memcpy(&posX, &netPosX, sizeof(float));
+		netPosY = ntohl(netPosY); memcpy(&posY, &netPosY, sizeof(float));
+		netVelX = ntohl(netVelX); memcpy(&velX, &netVelX, sizeof(float));
+		netVelY = ntohl(netVelY); memcpy(&velY, &netVelY, sizeof(float));
+		netRotation = ntohl(netRotation); memcpy(&rotation, &netRotation, sizeof(float));
+		netTimestamp = ntohl(netTimestamp); memcpy(&timestamp, &netTimestamp, sizeof(float));
 
 		Bullet newBullet = { objectID, posX, posY, velX, velY, rotation, timestamp };
 		bulletMap[playerID].push_back(newBullet);
@@ -1139,24 +1025,48 @@ void WriteBullet(std::ostream& output)
 	char commandID = SERVER_BULLET_CREATION;
 	output.write(reinterpret_cast<const char*>(&commandID), sizeof(char));
 
-	unsigned short numPlayers = static_cast<unsigned short>(currentPlayers.size());
-	output.write(reinterpret_cast<const char*>(&numPlayers), sizeof(unsigned short));
+	uint16_t numPlayers = static_cast<uint16_t>(playerTransforms.size());
+	uint16_t netNumPlayers = htons(numPlayers);
+	output.write(reinterpret_cast<const char*>(&netNumPlayers), sizeof(uint16_t));
 
 	for (const auto& [playerID, bullets] : bulletMap)
 	{
-		output.write(reinterpret_cast<const char*>(&playerID), sizeof(unsigned short));
-		unsigned short numBullets = static_cast<unsigned short>(bullets.size());
-		output.write(reinterpret_cast<const char*>(&numBullets), sizeof(unsigned short));
+		uint16_t netPlayerID = htons(playerID);
+		output.write(reinterpret_cast<const char*>(&netPlayerID), sizeof(uint16_t));
+		uint16_t numBullets = static_cast<uint16_t>(bullets.size());
+		uint16_t netNumBullets = htons(numBullets);
+		output.write(reinterpret_cast<const char*>(&netNumBullets), sizeof(uint16_t));
 
 		for (const Bullet& bullet : bullets)
 		{
-			output.write(reinterpret_cast<const char*>(&bullet.objectID), sizeof(int));
-			output.write(reinterpret_cast<const char*>(&bullet.posX), sizeof(float));
-			output.write(reinterpret_cast<const char*>(&bullet.posY), sizeof(float));
-			output.write(reinterpret_cast<const char*>(&bullet.velocityX), sizeof(float));
-			output.write(reinterpret_cast<const char*>(&bullet.velocityY), sizeof(float));
-			output.write(reinterpret_cast<const char*>(&bullet.rotation), sizeof(float));
-			output.write(reinterpret_cast<const char*>(&bullet.timeStamp), sizeof(float));
+			uint32_t netObjectID = htonl(bullet.objectID);
+			output.write(reinterpret_cast<const char*>(&netObjectID), sizeof(uint32_t));
+
+			uint32_t netPosX, netPosY, netVelX, netVelY, netRotation, netTimeStamp;
+
+			memcpy(&netPosX, &bullet.posX, sizeof(float));
+			netPosX = htonl(netPosX);
+			output.write(reinterpret_cast<const char*>(&netPosX), sizeof(uint32_t));
+
+			memcpy(&netPosY, &bullet.posY, sizeof(float));
+			netPosY = htonl(netPosY);
+			output.write(reinterpret_cast<const char*>(&netPosY), sizeof(uint32_t));
+
+			memcpy(&netVelX, &bullet.velocityX, sizeof(float));
+			netVelX = htonl(netVelX);
+			output.write(reinterpret_cast<const char*>(&netVelX), sizeof(uint32_t));
+
+			memcpy(&netVelY, &bullet.velocityY, sizeof(float));
+			netVelY = htonl(netVelY);
+			output.write(reinterpret_cast<const char*>(&netVelY), sizeof(uint32_t));
+
+			memcpy(&netRotation, &bullet.rotation, sizeof(float));
+			netRotation = htonl(netRotation);
+			output.write(reinterpret_cast<const char*>(&netRotation), sizeof(uint32_t));
+
+			memcpy(&netTimeStamp, &bullet.timeStamp, sizeof(float));
+			netTimeStamp = htonl(netTimeStamp);
+			output.write(reinterpret_cast<const char*>(&netTimeStamp), sizeof(uint32_t));
 		}
 	}
 
@@ -1182,9 +1092,9 @@ void CreateNewAsteroid()
 		};
 
 	auto playerCollision = [&](float x, float y) {
-		for (const auto& player : currentPlayers) {
-			if (x > player.Position_x - COLLISION_RADIUS_NDC && x < player.Position_x + COLLISION_RADIUS_NDC &&
-				y > player.Position_y - COLLISION_RADIUS_NDC && y < player.Position_y + COLLISION_RADIUS_NDC) {
+		for (const auto& [_, player] : playerTransforms) {
+			if (x > player.Position_X - COLLISION_RADIUS_NDC && x < player.Position_X + COLLISION_RADIUS_NDC &&
+				y > player.Position_Y - COLLISION_RADIUS_NDC && y < player.Position_Y + COLLISION_RADIUS_NDC) {
 				return true;
 			}
 		}
@@ -1234,24 +1144,202 @@ void WriteNewAsteroids(std::ostream& output)
 {
 	char commandID = SERVER_ASTEROID_CREATION;
 	output.write(reinterpret_cast<const char*>(&commandID), sizeof(char));
-	unsigned short numAsteroids = static_cast<unsigned short>(newAsteroidQueue.size());
-	output.write(reinterpret_cast<const char*>(&numAsteroids), sizeof(unsigned short));
+
+	uint16_t numAsteroids = static_cast<uint16_t>(newAsteroidQueue.size());
+	uint16_t netNumAsteroids = htons(numAsteroids);
+	output.write(reinterpret_cast<const char*>(&netNumAsteroids), sizeof(uint16_t));
 
 	while (!newAsteroidQueue.empty())
 	{
 		Asteroids asteroid = newAsteroidQueue.front();
 		newAsteroidQueue.pop();
 
-		output.write(reinterpret_cast<const char*>(&asteroid.id), sizeof(int));
-		output.write(reinterpret_cast<const char*>(&asteroid.Position_x), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&asteroid.Position_y), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&asteroid.Velocity_x), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&asteroid.Velocity_y), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&asteroid.Rotation), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&asteroid.Scale_x), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&asteroid.Scale_y), sizeof(float));
-		output.write(reinterpret_cast<const char*>(&asteroid.time_of_creation), sizeof(float));
+		uint32_t netID = htonl(asteroid.id);
+		output.write(reinterpret_cast<const char*>(&netID), sizeof(uint32_t));
+
+		uint32_t netPosX, netPosY, netVelX, netVelY, netRotation, netScaleX, netScaleY, netTimeCreated;
+
+		memcpy(&netPosX, &asteroid.Position_x, sizeof(float));
+		netPosX = htonl(netPosX);
+		output.write(reinterpret_cast<const char*>(&netPosX), sizeof(uint32_t));
+
+		memcpy(&netPosY, &asteroid.Position_y, sizeof(float));
+		netPosY = htonl(netPosY);
+		output.write(reinterpret_cast<const char*>(&netPosY), sizeof(uint32_t));
+
+		memcpy(&netVelX, &asteroid.Velocity_x, sizeof(float));
+		netVelX = htonl(netVelX);
+		output.write(reinterpret_cast<const char*>(&netVelX), sizeof(uint32_t));
+
+		memcpy(&netVelY, &asteroid.Velocity_y, sizeof(float));
+		netVelY = htonl(netVelY);
+		output.write(reinterpret_cast<const char*>(&netVelY), sizeof(uint32_t));
+
+		memcpy(&netRotation, &asteroid.Rotation, sizeof(float));
+		netRotation = htonl(netRotation);
+		output.write(reinterpret_cast<const char*>(&netRotation), sizeof(uint32_t));
+
+		memcpy(&netScaleX, &asteroid.Scale_x, sizeof(float));
+		netScaleX = htonl(netScaleX);
+		output.write(reinterpret_cast<const char*>(&netScaleX), sizeof(uint32_t));
+
+		memcpy(&netScaleY, &asteroid.Scale_y, sizeof(float));
+		netScaleY = htonl(netScaleY);
+		output.write(reinterpret_cast<const char*>(&netScaleY), sizeof(uint32_t));
+
+		memcpy(&netTimeCreated, &asteroid.time_of_creation, sizeof(float));
+		netTimeCreated = htonl(netTimeCreated);
+		output.write(reinterpret_cast<const char*>(&netTimeCreated), sizeof(uint32_t));
 	}
+}
+
+/*
+	\brief
+	Reads player transform data from input stream and updates player information
+*/
+void ReadPlayerTransforms(std::istream& input, unsigned short playerID) {
+
+	PlayerTransform transform;
+	uint32_t netVal;
+
+	input.read(reinterpret_cast<char*>(&netVal), sizeof(uint32_t));
+	netVal = ntohl(netVal); memcpy(&transform.Position_X, &netVal, sizeof(float));
+
+	input.read(reinterpret_cast<char*>(&netVal), sizeof(uint32_t));
+	netVal = ntohl(netVal); memcpy(&transform.Position_Y, &netVal, sizeof(float));
+
+	input.read(reinterpret_cast<char*>(&netVal), sizeof(uint32_t));
+	netVal = ntohl(netVal); memcpy(&transform.Velocity_X, &netVal, sizeof(float));
+
+	input.read(reinterpret_cast<char*>(&netVal), sizeof(uint32_t));
+	netVal = ntohl(netVal); memcpy(&transform.Velocity_Y, &netVal, sizeof(float));
+
+	input.read(reinterpret_cast<char*>(&netVal), sizeof(uint32_t));
+	netVal = ntohl(netVal); memcpy(&transform.Acceleration_X, &netVal, sizeof(float));
+
+	input.read(reinterpret_cast<char*>(&netVal), sizeof(uint32_t));
+	netVal = ntohl(netVal); memcpy(&transform.Acceleration_Y, &netVal, sizeof(float));
+
+	input.read(reinterpret_cast<char*>(&netVal), sizeof(uint32_t));
+	netVal = ntohl(netVal); memcpy(&transform.Rotation, &netVal, sizeof(float));
+
+	playerTransforms[playerID] = transform;
+	
+}
+
+/*
+	\brief
+	Writes all player transform data to output stream
+*/
+void WritePlayerTransforms(std::ostream& output) {
+
+	// command id
+	char commandID = SERVER_PLAYER_TRANSFORM;
+	output.write(reinterpret_cast<const char*>(&commandID), sizeof(char));
+
+	// num of players
+	uint16_t numPlayers = static_cast<uint16_t>(playerTransforms.size());
+	uint16_t netNumPlayers = htons(numPlayers);
+	output.write(reinterpret_cast<const char*>(&netNumPlayers), sizeof(uint16_t));
+
+	for (const auto& [playerID, transform] : playerTransforms) {
+
+		uint16_t netPlayerID = htons(playerID);
+		output.write(reinterpret_cast<const char*>(&netPlayerID), sizeof(uint16_t));
+
+		uint32_t netVal;
+
+		memcpy(&netVal, &transform.Position_X, sizeof(float));
+		netVal = htonl(netVal);
+		output.write(reinterpret_cast<const char*>(&netVal), sizeof(uint32_t));
+
+		memcpy(&netVal, &transform.Position_Y, sizeof(float));
+		netVal = htonl(netVal);
+		output.write(reinterpret_cast<const char*>(&netVal), sizeof(uint32_t));
+
+		memcpy(&netVal, &transform.Velocity_X, sizeof(float));
+		netVal = htonl(netVal);
+		output.write(reinterpret_cast<const char*>(&netVal), sizeof(uint32_t));
+
+		memcpy(&netVal, &transform.Velocity_Y, sizeof(float));
+		netVal = htonl(netVal);
+		output.write(reinterpret_cast<const char*>(&netVal), sizeof(uint32_t));
+
+		memcpy(&netVal, &transform.Acceleration_X, sizeof(float));
+		netVal = htonl(netVal);
+		output.write(reinterpret_cast<const char*>(&netVal), sizeof(uint32_t));
+
+		memcpy(&netVal, &transform.Acceleration_Y, sizeof(float));
+		netVal = htonl(netVal);
+		output.write(reinterpret_cast<const char*>(&netVal), sizeof(uint32_t));
+
+		memcpy(&netVal, &transform.Rotation, sizeof(float));
+		netVal = htonl(netVal);
+		output.write(reinterpret_cast<const char*>(&netVal), sizeof(uint32_t));
+	}
+}
+
+/*
+	\brief
+	Reads asteroid collision data from input stream
+*/
+void ReadAsteroidCollisions(std::istream& input, unsigned short playerID) {
+
+	// number of collisions
+	uint16_t netNumCollisions;
+	input.read(reinterpret_cast<char*>(&netNumCollisions), sizeof(uint16_t));
+	uint16_t numCollisions = ntohs(netNumCollisions);
+
+	for (unsigned short i = 0; i < numCollisions; ++i) {
+		uint32_t netObjectID, netAsteroidID, netTimestamp;
+		input.read(reinterpret_cast<char*>(&netObjectID), sizeof(uint32_t));
+		input.read(reinterpret_cast<char*>(&netAsteroidID), sizeof(uint32_t));
+		input.read(reinterpret_cast<char*>(&netTimestamp), sizeof(uint32_t));
+
+		AsteroidCollision collision;
+		collision.playerID = playerID;
+		netObjectID = ntohl(netObjectID);
+		memcpy(&collision.objectID, &netObjectID, sizeof(unsigned int));
+		netAsteroidID = ntohl(netAsteroidID);
+		memcpy(&collision.asteroidID, &netAsteroidID, sizeof(unsigned int));
+		netTimestamp = ntohl(netTimestamp);
+		memcpy(&collision.timestamp, &netTimestamp, sizeof(float));
+
+		// Store to map with asteroidID as key for earliest timestamp comparison
+		auto& existing = asteroidCollisions[collision.asteroidID];
+		if (existing.timestamp == 0.0f || collision.timestamp < existing.timestamp) {
+			collision.playerID = playerID;
+			asteroidCollisions[collision.asteroidID] = collision;
+		}
+	}
+}
+
+/*
+	\brief
+	Writes asteroid collision data to output stream
+*/
+void WriteAsteroidCollision(std::ostream& output) {
+
+	// command id
+	char commandID = SERVER_COLLISION;
+	output.write(reinterpret_cast<const char*>(&commandID), sizeof(char));
+
+	uint16_t numCollisions = static_cast<uint16_t>(asteroidCollisions.size()); 
+	uint16_t netNumCollisions = htons(numCollisions);
+	output.write(reinterpret_cast<const char*>(&netNumCollisions), sizeof(uint16_t));
+
+	for (const auto& [asteroidID, collisionData] : asteroidCollisions) {
+		uint16_t netPlayerID = htons(collisionData.playerID);
+		output.write(reinterpret_cast<const char*>(&netPlayerID), sizeof(uint16_t));
+
+		uint32_t netObjectID = htonl(collisionData.objectID);
+		output.write(reinterpret_cast<const char*>(&netObjectID), sizeof(uint32_t));
+
+		uint32_t netAsteroidID = htonl(collisionData.asteroidID);
+		output.write(reinterpret_cast<const char*>(&netAsteroidID), sizeof(uint32_t));
+
+	}
+
 }
 
 
