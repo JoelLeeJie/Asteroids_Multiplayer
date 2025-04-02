@@ -72,7 +72,7 @@ public:
 		: addrDest{ addr }
 	{
 	}
-	
+
 	void SendLongMessage(const std::string& message)
 	{
 		if (message.empty()) return;
@@ -82,7 +82,7 @@ public:
 			//The last part of the message, add COMMAND_COMPLETE to indicate it is complete.
 			if (long_message.size() <= MAX_PAYLOAD_SIZE - 1)
 			{
-				long_message = (char)(COMMAND_COMPLETE) + long_message;
+				long_message = (char)(COMMAND_COMPLETE)+long_message;
 				//String length is less than or equal to max payload size, so just push it all as one packet.
 				messages_to_send.push(long_message);
 				reliable_transfer.toSend = true;
@@ -97,7 +97,7 @@ public:
 				//Move to the next chunk of the message.
 				long_message = long_message.substr(MAX_PAYLOAD_SIZE);
 			}
-			
+
 		}
 	}
 	//Used to control reliable data transfer.
@@ -212,11 +212,12 @@ SOCKET udp_socket{};
 std::mutex socket_lock{};
 std::mutex packet_queue_lock{};
 
+
 //Indicates if the game has ended, so0 the multi-threaded functions can end too.
 bool isGameRunning{ true };
 
 //nForward declarations:
-//void HandleStartGame();
+void HandleStartGame();
 
 // ------------------------------------------------Entry Point--------------------------------------------------------
 /*
@@ -240,10 +241,10 @@ void PrintString(const std::string& message_to_print)
 void GameProgram()
 {
 	//Wait for players to join.
-	//HandleStartGame();
+	HandleStartGame();
 	while (isGameRunning)
 	{
-		
+
 		/*
 			Structure of Program:
 			It first receives the message, and checks which client sent it (session ID).
@@ -262,75 +263,59 @@ void GameProgram()
 	}
 }
 
-///*
-//	\brief
-//	Continually get join requests from players, adding them as new players to the map.
-//	This happens until the START command is given, which is then echoed to all players and then the game starts (the function returns).
-//*/
-//void HandleStartGame()
-//{
-//	char temp_buffer[MAX_BUFFER_SIZE]{};
-//	while (true)
-//	{
-//		memset(temp_buffer, 0, MAX_BUFFER_SIZE);
-//		//==Read any incoming message.
-//		sockaddr_storage sender_addr{}; //temporarily store sender's address.
-//		int size_sockaddr = sizeof(sender_addr);
-//		int bytes_read{};
-//		
-//		{
-//			std::lock_guard<std::mutex> socket_locker{socket_lock};
-//			bytes_read = recvfrom(udp_socket, temp_buffer, MAX_BUFFER_SIZE, 0, (sockaddr*)&sender_addr, &size_sockaddr);
-//		}
-//		 
-//		
-//		//Join request or Start request detected.
-//		//Both only has 1 byte.
-//		if (bytes_read == 1)
-//		{
-//			char command_ID = temp_buffer[0];
-//			//Player wants to join.
-//			if (command_ID == JOIN_REQUEST)
-//			{
-//				int client_player_id = -1; //-1 to indicate it doesn't have a player id yet.
-//				//Iterate over the map, to see if the player already is in the game (maybe they never received the JOIN_RESPONSE).
-//				for (auto& player_entry : player_Session_Map)
-//				{
-//					//Check if they're already in the map.
-//					if (!Compare_SockAddr(&sender_addr, &player_entry.second.addrDest)) continue;
-//					//They are already in the map.
-//					client_player_id = player_entry.first;
-//				}
-//
-//				//No player entry found for this ip address, so add in a new entry.
-//				if (client_player_id == -1)
-//				{
-//					client_player_id = player_id;
-//					/*
-//						Store new player information into the map.
-//					*/
-//					player_Session_Map.emplace(player_id++, Player_Session{ sender_addr });
-//				}
-//
-//				//Send the information back to the player as a JOIN_RESPONSE, [Checksum, 2][0x21][Player_ID, 2].
-//				uint16_t network_player_id = htons((uint16_t)client_player_id);
-//				char buffer[10]{};
-//				buffer[2] = JOIN_RESPONSE;
-//				memcpy_s(buffer+3, 2, &network_player_id, 2);
-//				uint16_t checksum = CalculateChecksum(3, buffer + 2);
-//				checksum = htons(checksum);
-//				memcpy_s(buffer, 2, &checksum, 2);
-//				std::lock_guard<std::mutex> socket_locker{socket_lock};
-//				WriteToSocket(udp_socket, sender_addr, buffer, 5);
-//			}
-//		}
-//
-//		/*
-//			TODO: Handle start request, ensuring that all players receive start command via ACK.
-//		*/
-//
-//	}
-//}
+/*
+	\brief
+	Continually get join requests from players, adding them as new players to the map.
+	This happens until the START command is given, which is then echoed to all players and then the game starts (the function returns).
+*/
+void HandleStartGame()
+{
+	while (true)
+	{
+		/*
+			Loops until a player sends a start command.
+			As the start command will be the first command of the game (besides JOIN_REQUEST/ACK),
+			just check for anything in the buffer and see if it's the start command.
+		*/
+		{
+			std::lock_guard<std::mutex> map_lock{ session_map_lock };
+			for (auto& session_pair : player_Session_Map)
+			{
+				auto& session = session_pair.second;
+				//check if the items in the buffer are readable and completed.
+				if (!session.is_recv_message_complete || session.recv_buffer.empty()) continue;
+				char command_ID = session.recv_buffer[0];
+				//See if the command received is a start command.
+				if (command_ID != START_GAME) continue;
+				/*
+					Start game command received from one player, so send to every player for them to start.
+					Clear all the recvbuffers as well.
+					Set isStart to true.
+				*/
+				break;
+			}
+		}
+	}
+	/*
+		Start game command received from one player, so send to every player for them to start.
+		Clear all the recvbuffers as well.
+	*/
+	//Hardcoded way to wait for other packets to come in first, just in case multiple players press START at the same time, so all buffers can be properly cleared.
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	std::lock_guard<std::mutex> map_lock{ session_map_lock };
+	for (auto& session_pair : player_Session_Map)
+	{
+		auto& session = session_pair.second;
+		//Clear before moving to start of game, to ensure no additional START_GAME command is mistakenly read as a game command.
+		session.recv_buffer.clear();
+		//Since buffer is cleared.
+		session.is_recv_message_complete = false;
+
+		std::string start_game{ (char)START_GAME };
+		//Send back a start game command to all players using RDT.
+		session.SendLongMessage(start_game);
+	}
+}
 
 ///*
 //	\brief
@@ -448,7 +433,7 @@ void ReceiveSendMessages()
 				//Below here, packet is to be sent.
 				std::string message_to_send = session.messages_to_send.front();
 				//Don't pop unless ACK'd
-				
+
 				//Add sequence number to the send.
 				uint32_t network_sequence_number = htonl(session.reliable_transfer.current_sequence_number);
 				char number_buffer[4]{};
@@ -730,7 +715,7 @@ void HandleReceivedPackets()
 				This is because both general command ID and player ID are no longer necessary (any message in the player recvbuffer is both a COMMAND and belongs to that player).
 				Doing this also helps to chain incomplete packets together.
 			*/
-			session.recv_buffer.insert(session.recv_buffer.end(), packet.data.begin()+3, packet.data.end());
+			session.recv_buffer.insert(session.recv_buffer.end(), packet.data.begin() + 3, packet.data.end());
 			if (command_ID == COMMAND_COMPLETE) session.is_recv_message_complete = true;
 			else session.is_recv_message_complete = false; //Still need to wait for more packets.
 
@@ -745,19 +730,17 @@ void HandleReceivedPackets()
 */
 int main(int argc, char* argv[])
 {
+	std::string temp;
 	std::string udp_port_string{};
-	if (argc < 2)
+	std::ifstream config_file{ "Config.txt" };
+	if (!config_file.is_open())
 	{
-		// Get Port Number
-		std::cout << "Server UDP Port Number: ";
-		std::getline(std::cin, udp_port_string);
+		PrintString("Unable to open Config.txt. Add to project directory and executable directory.");
+		return -1;
 	}
-	else
-	{
-		udp_port_string = argv[1];
-	}
+	config_file >> std::ws >> temp >> std::ws >> udp_port_string;
 	server_udp_port_number = std::stoi(udp_port_string);
-
+	config_file.close();
 	/*
 		1. Create a UDP socket with port number based on client input
 		2. Bind the UDP socket to the machine
@@ -848,7 +831,6 @@ int main(int argc, char* argv[])
 	struct sockaddr_in* serverAddress = reinterpret_cast<struct sockaddr_in*> (info_udp->ai_addr);
 	inet_ntop(AF_INET, &(serverAddress->sin_addr), serverIPAddr, INET_ADDRSTRLEN);
 	getnameinfo(info_udp->ai_addr, static_cast <socklen_t> (info_udp->ai_addrlen), serverIPAddr, sizeof(serverIPAddr), nullptr, 0, NI_NUMERICHOST);
-	std::cerr << std::endl;
 	std::cerr << "Server IP Address: " << serverIPAddr << std::endl;
 	std::cerr << "Server UDP Port Number: " << udp_port_string << std::endl;
 
@@ -1003,7 +985,7 @@ void CreateNewAsteroid()
 		posY = (static_cast<float>(rand()) / RAND_MAX) * 2.0f - 1.0f;
 
 	} while (playerCollision(posX, posY));
-	
+
 	velX = (float)(rand() % 200) - 100.f;
 	velY = (float)(rand() % 200) - 100.f;
 
