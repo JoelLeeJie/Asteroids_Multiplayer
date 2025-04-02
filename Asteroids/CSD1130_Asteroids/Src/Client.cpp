@@ -385,6 +385,8 @@ int Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsigne
 */
 std::string Write_AsteroidCollision(unsigned int session_ID, std::vector<CollisionEvent>& all_collisions)
 {
+	if (all_collisions.size() == 0) return "";
+
 	// Check number of collisions
 	uint16_t num_collides = all_collisions.size();
 	num_collides = htons(num_collides);

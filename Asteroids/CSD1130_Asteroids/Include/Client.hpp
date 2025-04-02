@@ -141,8 +141,8 @@ extern std::map<unsigned int, std::map<unsigned int, Bullet>> all_bullets; //all
 extern std::vector<std::pair<unsigned int, unsigned int>> new_otherbullets; //list of bullets created by other players
 extern unsigned int bullet_ID; //start from 0
 // 
-//std::map<unsigned int, Asteroids> Asteroid_map 
-//std::vector<CollisionEvent> all_collisions;
+extern std::map<unsigned int, Asteroids> Asteroid_map;
+extern std::vector<CollisionEvent> all_collisions;
 
 
 std::string Write_PlayerTransform(Player player);

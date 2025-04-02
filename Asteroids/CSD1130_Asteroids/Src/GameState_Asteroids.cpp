@@ -174,7 +174,8 @@ std::map<unsigned int, std::map<unsigned int, Bullet>> all_bullets;
 unsigned int bullet_ID = 1;
 std::vector<unsigned int> new_players;
 std::vector<std::pair<unsigned int, unsigned int>> new_otherbullets; //list of bullets created by other players
-
+std::map<unsigned int, Asteroids> Asteroid_map;
+std::vector<CollisionEvent> all_collisions;
 
 float get_TimeStamp() {
 	auto now = std::chrono::steady_clock::now();
@@ -838,6 +839,7 @@ void GameStateAsteroidsUpdate(void)
 		std::string message_to_SERVER{};
 		message_to_SERVER += Write_PlayerTransform(players[this_player.player_ID]);
 		message_to_SERVER += Write_NewBullet(this_player.player_ID, new_bullets);
+		message_to_SERVER += Write_AsteroidCollision(this_player.player_ID, all_collisions);
 
 		//std::cout << message_to_SERVER.c_str();
 
