@@ -896,6 +896,8 @@ void GameStateAsteroidsUpdate(void)
 		std::lock_guard<std::mutex> player_lock{ this_player_lock };
 		if (!this_player.recv_buffer.empty() && this_player.is_recv_message_complete) {
 			buffer = this_player.recv_buffer;
+			this_player.recv_buffer.clear(); //Clear since it's been read.
+			this_player.is_recv_message_complete = false; //Since buffer has been cleared.
 		}
 
 
@@ -911,13 +913,12 @@ void GameStateAsteroidsUpdate(void)
 		while (bytes_read < buffer.size()) {
 
 			uint8_t Command_ID = buffer[bytes_read]; //lets say 0
-			bytes_read += 1;
-			std::string result = buffer.substr(bytes_read); // Starts at index 1 and goes to the end
+			bytes_read++;
 			// reads 5, read next command
 
 			if (Command_ID == 0x4) { //server_player_transform
-
-
+				if (bytes_read >= buffer.size()) break; //No more things to read.
+				std::string result = buffer.substr(bytes_read); // Starts at index 1 and goes to the end
 				bytes_read += Read_PlayersTransform(result, players, new_players); //add to player map, lets say 5
 				//so now bytes read will be 6
 
@@ -943,7 +944,8 @@ void GameStateAsteroidsUpdate(void)
 
 			}
 			else if (Command_ID == 0x5) { //server_bullet_transform
-
+				if (bytes_read >= buffer.size()) break; //No more things to read.
+				std::string result = buffer.substr(bytes_read); // Starts at index 1 and goes to the end
 				bytes_read += Read_New_Bullets(result, all_bullets, players, new_otherbullets);
 
 				for (std::pair<unsigned int, unsigned int> one_bullet : new_otherbullets) {
