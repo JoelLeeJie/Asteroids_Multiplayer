@@ -154,7 +154,8 @@ void Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsign
 std::string Write_AsteroidCollision(unsigned int session_ID, std::vector<CollisionEvent>& all_collisions);
 void Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, Asteroids>& Asteroid_map);
 void Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>&, std::map<unsigned int, Asteroids>& Asteroid_map);
-
+//Thread-Safe printing of console message.
+void PrintString(const std::string& message);
 /*
 	UDP functions
 */

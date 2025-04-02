@@ -13,6 +13,19 @@ std::mutex this_player_lock{};
 SOCKET udp_socket;
 std::mutex socket_lock{};
 
+/*
+	Thread-safe atomic writing to console.
+*/
+void PrintString(const std::string& message_to_print)
+{
+#ifdef _DEBUG
+	static std::mutex console_mutex{};
+	std::lock_guard<std::mutex> console_lock{ console_mutex };
+	std::cout << message_to_print << std::endl;
+#endif
+}
+
+
 std::string Write_PlayerTransform(Player player) {
 
 	//uint16_t port_network_order = htons(port);
@@ -77,7 +90,7 @@ void Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& p
 
 	if (buffer.empty()) {
 
-		std::cout << "Read_PlayersTransform: buffer is empty!\n";
+		PrintString("Read_PlayersTransform: buffer is empty!");
 
 		return;
 	}
@@ -224,7 +237,7 @@ void Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsign
 
 	if (buffer.empty()) {
 
-		std::cout << "Read_New_Bullets: buffer is empty!\n";
+		PrintString("Read_New_Bullets: buffer is empty!");
 
 		return;
 	}
@@ -406,7 +419,7 @@ void Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, As
 
 	// Check if wrong string was sent to this function
 	if (buffer[0] != 0x6) {
-		std::cout << "Read_AsteroidCreations: Wrong Command ID sent to this function" << std::endl;
+		PrintString("Read_AsteroidCreations: Wrong Command ID sent to this function");
 		return;
 	}
 
@@ -456,7 +469,7 @@ void Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, 
 
 	// Check if wrong string was sent to this function
 	if (buffer[0] != 0x7) {
-		std::cout << "Read_AsteroidCreations: Wrong Command ID sent to this function" << std::endl;
+		PrintString("Read_AsteroidCreations: Wrong Command ID sent to this function");
 		return;
 	}
 
@@ -531,20 +544,21 @@ namespace
 
 int InitializeUDP()
 {
+	std::string temp{};
 	std::string server_ip{};
 	std::string server_udp_portString{}, client_udp_portString{};
 	std::ifstream config_file{ "Config.txt" };
+	if (!config_file.is_open())
+	{
+		PrintString("Config.txt not found: Put with executable.");
+		throw std::exception("Config.txt not found: Put with executable.");
+	}
 	// Get Server IP Address
-	std::cout << "Server IP Address: ";
-	std::getline(std::cin, server_ip);
-
-	std::cout << std::endl;
-
-	// Get Port Number
-	std::cout << "Server UDP Port Number: ";
-	std::getline(std::cin, server_udp_portString);
-	std::cout << "Client UDP Port Number: ";
-	std::getline(std::cin, client_udp_portString);
+	config_file >> temp >> server_ip >> std::ws;
+	//Get Server Port number
+	config_file >> temp >> server_udp_portString >> std::ws;
+	//Get Client Port number
+	config_file >> temp >> client_udp_portString >> std::ws;
 
 	// -------------------------------------------------------------------------
 	// Start up Winsock, asking for version 2.2.
@@ -678,6 +692,7 @@ void HandleReceivedPackets(std::string data, int seq_or_ack_number)
 
 	if (command_ID == ACK)
 	{
+		PrintString(std::string("ACK RECV, Seq Num: ") + std::to_string(seq_or_ack_number));
 		/*
 			Using ACK number, decide what to do with ACK.
 			If ACK == current sequence number, packet has been received successfully
@@ -724,6 +739,7 @@ void HandleReceivedPackets(std::string data, int seq_or_ack_number)
 		uint16_t id{};
 		memcpy_s(&id, 2, data.data() + 1, 2);
 		this_player.player_ID = ntohs(id);
+		PrintString("JOIN_RESPONSE RECV, Seq Num: " + std::to_string(seq_or_ack_number) + " Player ID: " + std::to_string(this_player.player_ID));
 
 		//Since "ACK" for the recently sent "JOIN_REQUEST" message is successful, then respond accordingly.
 		this_player.reliable_transfer.current_sequence_number++;
@@ -793,6 +809,8 @@ void HandleReceivedPackets(std::string data, int seq_or_ack_number)
 		this_player.recv_buffer.insert(this_player.recv_buffer.end(), data.begin() + 1, data.end());
 		if (command_ID == COMMAND_COMPLETE) this_player.is_recv_message_complete = true;
 		else this_player.is_recv_message_complete = false; //Still need to wait for more packets.
+
+		PrintString("MESSAGE RECV, Seq Num: " + std::to_string(seq_or_ack_number) + " Data: " + data);
 	}
 
 }
@@ -840,8 +858,8 @@ void ReceiveSendMessages()
 			if (!session.reliable_transfer.toSend) break;
 			//Below here, packet is to be sent.
 			std::string message_to_send = session.messages_to_send.front();
-			session.messages_to_send.pop();
-
+			//Don't pop, unless ACK'd.
+			
 			//Add sequence number to the send.
 			uint32_t network_sequence_number = htonl(session.reliable_transfer.current_sequence_number);
 			char number_buffer[4]{};
@@ -861,6 +879,8 @@ void ReceiveSendMessages()
 			session.reliable_transfer.time_last_packet_sent = GetTime();
 			session.reliable_transfer.toSend = false;
 			data_to_write.push_back({ session.addrDest, data });
+
+			PrintString("MESSAGE SENT, Seq Num: " + std::to_string(session.reliable_transfer.current_sequence_number) + " Data: " + data);
 		}
 
 		{
