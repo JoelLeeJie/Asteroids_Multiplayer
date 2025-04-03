@@ -108,7 +108,35 @@ std::string Write_PlayerTransform(Player player) {
 	std::cout << "VEL: x: " << velX << " y: " << velY << std::endl;
 	std::cout << "rotation: " << rot2 << std::endl;*/
 
+	std::memcpy(&Xpos, &result[1], 4);
+	std::memcpy(&Ypos, &result[5], 4);
+	std::memcpy(&Xvel, &result[9], 4);
+	std::memcpy(&Yvel, &result[13], 4);
+	std::memcpy(&Xacc, &result[17], 4);
+	std::memcpy(&Yacc, &result[21], 4);
+	std::memcpy(&rot, &result[25], 4);
 
+	Xpos = ntohl(Xpos);
+	Ypos = ntohl(Ypos);
+	Xvel = ntohl(Xvel);
+	Yvel = ntohl(Yvel);
+	Xacc = ntohl(Xacc);
+	Yacc = ntohl(Yacc);
+	rot = ntohl(rot);
+
+	float posX, posY, velX, velY, accX, accY, rot2;
+	std::memcpy(&posX, &Xpos, 4);
+	std::memcpy(&posY, &Ypos, 4);
+	std::memcpy(&velX, &Xvel, 4);
+	std::memcpy(&velY, &Yvel, 4);
+	std::memcpy(&accX, &Xacc, 4);
+	std::memcpy(&accY, &Yacc, 4);
+	std::memcpy(&rot2, &rot, 4);
+
+	std::cout << "sending this player transform: =============================\n";
+	std::cout << "POS: x: " << posX << " y: " << posY << std::endl;
+	std::cout << "VEL: x: " << velX << " y: " << velY << std::endl;
+	std::cout << "rotation: " << rot2 << std::endl;
 
 	return result;
 
@@ -201,7 +229,10 @@ int Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& pl
 		}
 
 		bytes_read += 30;
-
+		std::cout << "Receiving next player transform: =============================\n";
+		std::cout << "POS: x: " << player.Position_X << " y: " << player.Position_Y << std::endl;
+		std::cout << "VEL: x: " << player.Velocity_X << " y: " << player.Velocity_Y << std::endl;
+		std::cout << "rotation: " << player.Rotation << std::endl;
 
 	}
 	std::cout << "Read_PlayersTransform | bytes read: " << bytes_read << std::endl;
