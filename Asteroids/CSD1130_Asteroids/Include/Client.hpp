@@ -151,6 +151,7 @@ extern std::vector<CollisionEvent> all_collisions;
 extern std::vector<std::pair<unsigned int, unsigned int>> bullet_destruction;
 extern std::vector<unsigned int> asteroid_destruction;
 extern std::set<unsigned int> player_hit;
+extern std::vector<int> highscores;
 
 std::string Write_PlayerTransform(Player player);
 int Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& player_map, std::vector<unsigned int>& players_to_create);

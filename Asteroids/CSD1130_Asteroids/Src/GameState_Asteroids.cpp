@@ -59,6 +59,7 @@ const float         BOUNDING_RECT_SIZE = 1.0f;         // this is the normalized
 
 const float			MAX_FLOAT_VALUE = 3.402823466e+38F;
 
+s8					pFont;
 // Constants
 constexpr float epsilon = 0.001f;
 
@@ -187,6 +188,7 @@ std::vector<CollisionEvent> all_collisions;
 std::vector<unsigned int> asteroid_destruction;
 std::set<unsigned int> player_hit;
 std::vector<std::pair<unsigned int, unsigned int>> bullet_destruction;
+std::vector<int> highscores;
 
 float get_TimeStamp() {
 	auto now = std::chrono::steady_clock::now();
@@ -353,6 +355,7 @@ void GameStateAsteroidsLoad(void)
 
 	pObj->pMesh = AEGfxMeshEnd();
 	AE_ASSERT_MESG(pObj->pMesh, "fail to create object!!");
+	pFont = AEGfxCreateFont("../Assets/liberation-mono.ttf", 72);
 }
 
 /******************************************************************************/
@@ -431,7 +434,9 @@ void GameStateAsteroidsInit(void)
 	//Write_To_Socket(client_socket, message.size(), message.data());
 
 	/////////////////////////////////////////
-	
+	for (int i = 0; i < 4; i++) {
+		highscores.push_back(0);
+	}
 }
 
 /******************************************************************************/
@@ -1368,6 +1373,31 @@ void GameStateAsteroidsDraw(void)
 
 		onValueChange = false;
 	}
+
+	f32 width = 8.8f, height = 8.5f;
+
+	for (std::pair<const unsigned int, Player>& temp : players) {
+		if (temp.first == UINT_MAX) continue;
+		if (temp.first >= 0 && temp.first < 4) {
+			char scoreStr[32];
+			snprintf(scoreStr, sizeof(scoreStr), "Player %u Score: %u", temp.first, highscores[temp.first]);
+
+			AEGfxPrint(pFont, scoreStr, -width / 10, -height / 10, 0.2, 1, 1, 1, 1);
+
+			height -= 1.f;
+		}
+	}
+
+	//for (int i = 0; i < highscores.size(); i++) {
+	//	if (i > 0) {
+	//		char scoreStr[32];
+	//		snprintf(scoreStr, sizeof(scoreStr), "Player %u Score: %u", i, highscores[i]);
+
+	//		AEGfxPrint(pFont, scoreStr, -width / 10, -height / 10, 0.2, 1, 1, 1, 1);
+
+	//		height -= 1.f;
+	//	}
+	//}
 }
 
 /******************************************************************************/
@@ -1399,6 +1429,7 @@ void GameStateAsteroidsUnload(void)
 		sGameObjList[i].type = TYPE_NUM; //idk if TYPE_NUM represents NONE, but i'll do it anyways.
 	}
 	sGameObjNum = 0;
+	AEGfxDestroyFont(pFont);
 }
 
 /******************************************************************************/
