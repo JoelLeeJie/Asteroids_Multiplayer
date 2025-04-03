@@ -231,7 +231,7 @@ std::string Write_NewBullet(unsigned int session_ID, std::map<unsigned int, Bull
 
 		int offset = 3 + j * 28;
 
-		uint32_t bullet_id = 1;
+		uint32_t bullet_id = 0;
 		std::memcpy(&bullet_id, &i->first, 4);
 
 
@@ -322,6 +322,9 @@ int Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsigne
 		bytes_read += 4;
 
 		for (int j = 0; j < (int)num_bullets; j++) {
+			if (offset + 28 > buffer.size()) {
+				return bytes_read;
+			}
 
 			uint32_t bullet_id = 0;
 			uint32_t Xpos = 0, Ypos = 0;
@@ -430,12 +433,12 @@ std::string Write_AsteroidCollision(unsigned int session_ID, std::vector<Collisi
 	num_collides = htons(num_collides);
 
 	// [4 bytes, Object ID][4 bytes, Asteroid ID][4 bytes, float timestamp]
-	std::string result(3 + num_collides * 12, '\0');
+	std::string result(2 + num_collides * 12, '\0');
 
 	// Set first byte to command ID
 	result[0] = static_cast<char>(0x3);
 
-	if (all_collisions.size() == 0) return "";
+	if (all_collisions.size() == 0) return result;
 	// Copy number of collisions to next 2 byte
 	std::memcpy(&result[1], &num_collides, 2);
 

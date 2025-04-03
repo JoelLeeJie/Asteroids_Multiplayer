@@ -221,8 +221,34 @@ void AddNewAsteroid()
 	} while (pos.x < spShip->posCurr.x + 200 && pos.x > spShip->posCurr.x - 200 || pos.y < spShip->posCurr.y + 200 && pos.y > spShip->posCurr.y - 200);
 	vel = { (float)(rand() % 200) - 100.f,(float)(rand() % 200) - 100.f };
 	scale = { (float)(rand() % (int)(ASTEROID_MAX_SCALE_X - ASTEROID_MIN_SCALE_X)) + ASTEROID_MIN_SCALE_X,(float)(rand() % (int)(ASTEROID_MAX_SCALE_Y - ASTEROID_MIN_SCALE_Y) + ASTEROID_MIN_SCALE_Y) };
-	gameObjInstCreate(TYPE_ASTEROID, &scale, &pos, &vel, 0.0f);
+	static int obj_id = 0;
+	auto test = gameObjInstCreate(TYPE_ASTEROID, &scale, &pos, &vel, 0.0f);
+
+	Asteroids temp;
+
+	// Position
+	temp.Position_x = pos.x;
+	temp.Position_y = pos.y;
+
+	// Velocity
+	temp.Velocity_x = vel.x;
+	temp.Velocity_y = vel.y;
+
+	// Scale
+	temp.Scale_x = scale.x;
+	temp.Scale_y = scale.y;
+
+	// Rotation
+	temp.Rotation = 0.0f;
+
+	// Time of creation
+	temp.time_of_creation = get_TimeStamp();
+
+	test->Object_ID = obj_id;
+	Asteroid_map[test->Object_ID] = temp;
+
 	sGameObjInstNum++;
+	obj_id++;
 }
 static bool onValueChange = true;
 
@@ -603,7 +629,7 @@ void GameStateAsteroidsUpdate(void)
 
 		{//just for printing
 			std::lock_guard<std::mutex> player_lock{ this_player_lock };
-			std::cout << "YAY NEW BULLET: bullet size: " << new_bullets.size() << std::endl;
+			//std::cout << "YAY NEW BULLET: bullet size: " << new_bullets.size() << std::endl;
 		}
 
 	}
@@ -688,6 +714,8 @@ void GameStateAsteroidsUpdate(void)
 			if (!gameObj2.flag) continue;
 			if (gameObj1.pObject->type == TYPE_ASTEROID)
 			{
+				CollisionEvent temp{};
+
 				switch (gameObj2.pObject->type)
 				{
 				case TYPE_SHIP: //Reduce life, move ship back to center, delete asteroid.
@@ -702,14 +730,20 @@ void GameStateAsteroidsUpdate(void)
 						}
 					}
 					//Has collided or will collide within this frame. 
-					spShip->posCurr = spShip->posPrev = { 0, 0 };
-					spShip->velCurr = { 0, 0 };
-					sShipLives--;
-					gameObjInstDestroy(&gameObj1);
-					AddNewAsteroid();
-					sGameObjInstNum--;
-					sScore += 100;
-					onValueChange = true;
+					//spShip->posCurr = spShip->posPrev = { 0, 0 };
+					//spShip->velCurr = { 0, 0 };
+					//sShipLives--;
+					//gameObjInstDestroy(&gameObj1);
+					//AddNewAsteroid();
+					//sGameObjInstNum--;
+					//sScore += 100;
+					//onValueChange = true;
+
+					temp.asteroid_ID = gameObj1.Object_ID;
+					temp.object_ID = 0;
+					temp.timestamp = get_TimeStamp();
+
+					all_collisions.push_back(temp);
 					break;
 				case TYPE_BULLET:
 					//Static collision failed, check dynamic now.
@@ -721,20 +755,28 @@ void GameStateAsteroidsUpdate(void)
 							continue;
 						}
 					}
-					//Has collided or will collide within this frame. 
-					//delete both bullet and asteroid, then add 1-2 new asteroids.
-					gameObjInstDestroy(&gameObj1);
-					gameObjInstDestroy(&gameObj2);
-					sGameObjInstNum -= 2;
-					for (int k = 0; k < rand() % 2 + 1; k++)
-					{
-						AddNewAsteroid();
-					}
-					sScore += 100;
-					onValueChange = true;
+					////Has collided or will collide within this frame. 
+					////delete both bullet and asteroid, then add 1-2 new asteroids.
+					//gameObjInstDestroy(&gameObj1);
+					//gameObjInstDestroy(&gameObj2);
+					//sGameObjInstNum -= 2;
+					//for (int k = 0; k < rand() % 2 + 1; k++)
+					//{
+					//	AddNewAsteroid();
+					//}
+					//sScore += 100;
+					//onValueChange = true;
+
+					temp.asteroid_ID = gameObj1.Object_ID;
+					temp.object_ID = gameObj2.Object_ID;
+					temp.timestamp = get_TimeStamp();
+
+					all_collisions.push_back(temp);
+
+					//std::cout << "Asteroid ID: " << gameObj1.Object_ID << ", Bullet ID: " << gameObj2.Object_ID << std::endl;
 					break;
 
-				default: continue; //If asteroid or wall, no need check collision.
+					default: continue; //If asteroid or wall, no need check collision.
 				}
 			}
 
@@ -928,17 +970,24 @@ void GameStateAsteroidsUpdate(void)
 	////////////////////////////////////////////////////////
 
 	std::string buffer{};
-
+	//Spinlock until something is read.
+	while (true)
 	{
-		std::lock_guard<std::mutex> player_lock{ this_player_lock };
-		if (!this_player.recv_buffer.empty() && this_player.is_recv_message_complete) {
-			buffer = this_player.recv_buffer;
-			this_player.recv_buffer.clear(); //Clear since it's been read.
-			this_player.is_recv_message_complete = false; //Since buffer has been cleared.
+		
+		{
+			std::lock_guard<std::mutex> player_lock{ this_player_lock };
+			if (!this_player.recv_buffer.empty() && this_player.is_recv_message_complete) {
+				buffer = this_player.recv_buffer;
+				this_player.recv_buffer.clear(); //Clear since it's been read.
+				this_player.is_recv_message_complete = false; //Since buffer has been cleared.
+				break;
+			}
 		}
-
-
+		//Give other threads a chance to grab the mutex.
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		continue;
 	}
+
 
 	if (!buffer.empty()) {
 
@@ -956,9 +1005,9 @@ void GameStateAsteroidsUpdate(void)
 			if (Command_ID == 0x4) { //server_player_transform
 				if (bytes_read >= buffer.size()) break; //No more things to read.
 				std::string result = buffer.substr(bytes_read); // Starts at index 1 and goes to the end
-				if (result.size()) {
-					continue;
-				}
+				//if (!result.size()) {
+				//	continue;
+				//}
 				bytes_read += Read_PlayersTransform(result, players, new_players); //add to player map, lets say 5
 				//so now bytes read will be 6
 
@@ -987,7 +1036,7 @@ void GameStateAsteroidsUpdate(void)
 				if (bytes_read >= buffer.size()) break; //No more things to read.
 				std::string result = buffer.substr(bytes_read); // Starts at index 1 and goes to the end
 				// test if msg is empty
-				if (result.size()) {
+				if (!result.size()) {
 					continue;
 				}
 				bytes_read += Read_New_Bullets(result, all_bullets, players, new_otherbullets);
@@ -1020,7 +1069,7 @@ void GameStateAsteroidsUpdate(void)
 			else if (Command_ID == 0x6) {
 				if (bytes_read >= buffer.size()) break; //No more things to read.
 				std::string result = buffer.substr(bytes_read);
-				if (result.size()) {
+				if (!result.size()) {
 					continue;
 				}
 				bytes_read += Read_AsteroidCreations(result, Asteroid_map, new_asteroids);
@@ -1046,18 +1095,20 @@ void GameStateAsteroidsUpdate(void)
 			else if (Command_ID == 0x7) {
 				if (bytes_read >= buffer.size()) break; //No more things to read.
 				std::string result = buffer.substr(bytes_read);
-				if (result.size()) {
+				if (!result.size()) {
 					continue;
 				}
 				bytes_read += Read_AsteroidDestruction(result, all_bullets, Asteroid_map, bullet_destruction, asteroid_destruction);
 
-				for (unsigned int Asteroid_ID : asteroid_destruction) {
+				for (unsigned int& Asteroid_ID : asteroid_destruction) {
 					DestroyInstanceByID(Asteroid_ID, TYPE_ASTEROID, this_player.player_ID);
+					//std::cout << "Asteroid ID: " << Asteroid_ID << std::endl;
 					onValueChange = true;
 				}
 
 				for (std::pair<unsigned int, unsigned int>& obj_ID : bullet_destruction) {
 					DestroyInstanceByID(obj_ID.second, TYPE_BULLET, obj_ID.first);
+					//std::cout << "Bullet ID: " << obj_ID.second << std::endl;
 					onValueChange = true;
 				}
 			}
@@ -1427,7 +1478,7 @@ void DestroyInstanceByID(int objectID, unsigned long type, int player_ID)
 		}
 	}
 
-	std::cerr << "Warning: Object of type " << type << " with ID " << objectID << " not found.\n";
+	//std::cerr << "Warning: Object of type " << type << " with ID " << objectID << " not found.\n";
 }
 
 

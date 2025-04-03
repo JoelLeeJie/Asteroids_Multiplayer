@@ -1065,6 +1065,7 @@ void WriteBullet(std::ostream& output)
 
 		for (const Bullet& bullet : bullets)
 		{
+
 			uint32_t netObjectID = htonl(bullet.objectID);
 			output.write(reinterpret_cast<const char*>(&netObjectID), sizeof(uint32_t));
 
@@ -1318,7 +1319,7 @@ void ReadAsteroidCollisions(std::istream& input, unsigned short playerID) {
 
 	for (unsigned short i = 0; i < numCollisions; ++i) {
 		uint32_t netObjectID, netAsteroidID, netTimestamp;
-		input.read(reinterpret_cast<char*>(&netObjectID), sizeof(uint32_t));
+ 		input.read(reinterpret_cast<char*>(&netObjectID), sizeof(uint32_t));
 		input.read(reinterpret_cast<char*>(&netAsteroidID), sizeof(uint32_t));
 		input.read(reinterpret_cast<char*>(&netTimestamp), sizeof(uint32_t));
 
