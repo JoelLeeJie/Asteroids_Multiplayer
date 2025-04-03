@@ -108,7 +108,35 @@ std::string Write_PlayerTransform(Player player) {
 	std::cout << "VEL: x: " << velX << " y: " << velY << std::endl;
 	std::cout << "rotation: " << rot2 << std::endl;*/
 
+	std::memcpy(&Xpos, &result[1], 4);
+	std::memcpy(&Ypos, &result[5], 4);
+	std::memcpy(&Xvel, &result[9], 4);
+	std::memcpy(&Yvel, &result[13], 4);
+	std::memcpy(&Xacc, &result[17], 4);
+	std::memcpy(&Yacc, &result[21], 4);
+	std::memcpy(&rot, &result[25], 4);
 
+	Xpos = ntohl(Xpos);
+	Ypos = ntohl(Ypos);
+	Xvel = ntohl(Xvel);
+	Yvel = ntohl(Yvel);
+	Xacc = ntohl(Xacc);
+	Yacc = ntohl(Yacc);
+	rot = ntohl(rot);
+
+	float posX, posY, velX, velY, accX, accY, rot2;
+	std::memcpy(&posX, &Xpos, 4);
+	std::memcpy(&posY, &Ypos, 4);
+	std::memcpy(&velX, &Xvel, 4);
+	std::memcpy(&velY, &Yvel, 4);
+	std::memcpy(&accX, &Xacc, 4);
+	std::memcpy(&accY, &Yacc, 4);
+	std::memcpy(&rot2, &rot, 4);
+
+	std::cout << "sending this player transform: =============================\n";
+	std::cout << "POS: x: " << posX << " y: " << posY << std::endl;
+	std::cout << "VEL: x: " << velX << " y: " << velY << std::endl;
+	std::cout << "rotation: " << rot2 << std::endl;
 
 	return result;
 
@@ -201,7 +229,10 @@ int Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& pl
 		}
 
 		bytes_read += 30;
-
+		std::cout << "Receiving next player transform: =============================\n";
+		std::cout << "POS: x: " << player.Position_X << " y: " << player.Position_Y << std::endl;
+		std::cout << "VEL: x: " << player.Velocity_X << " y: " << player.Velocity_Y << std::endl;
+		std::cout << "rotation: " << player.Rotation << std::endl;
 
 	}
 	std::cout << "Read_PlayersTransform | bytes read: " << bytes_read << std::endl;
@@ -314,6 +345,15 @@ int Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsigne
 		std::memcpy(&player_ID, &buffer[offset], 2);
 		player_ID = ntohs(player_ID);
 
+		{
+			std::lock_guard<std::mutex> player_lock{ this_player_lock };
+			if (player_ID == this_player.player_ID) {
+				offset += 32;
+				bytes_read += 32;
+				continue;
+			}
+		}
+		
 		uint16_t num_bullets = 0;
 		std::memcpy(&num_bullets, &buffer[offset + 2], 2);
 		num_bullets = ntohs(num_bullets);
@@ -492,9 +532,9 @@ int Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, Ast
 	num_asteroids = ntohs(num_asteroids);
 
 	int bytes_read = 2;
-
+	int offset = 2;
 	for (int i = 0; i < num_asteroids; i++) {
-		int offset = 2 + i * 36;
+		
 		Asteroids temp{};
 		int asteroid_ID;
 
@@ -507,34 +547,36 @@ int Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, Ast
 		// Position
 		std::memcpy(&temp.Position_x, &buffer[offset + 4], 4);
 		std::memcpy(&temp.Position_y, &buffer[offset + 8], 4);
-		temp.Position_x = ntohf(temp.Position_x);
-		temp.Position_y = ntohf(temp.Position_y);
-		temp.Position_x *= AEGfxGetWinMaxX();
-		temp.Position_y *= AEGfxGetWinMaxY();
+		temp.Position_x = ntohl(temp.Position_x);
+		temp.Position_y = ntohl(temp.Position_y);
+		std::cout << "Read asteroid info with position (" << temp.Position_x << ", " << temp.Position_y << ")" << std::endl;
+		temp.Position_x *= AEGfxGetWinMaxX() / 2;
+		temp.Position_y *= AEGfxGetWinMaxY() / 2;
 
 		// Velocity
 		std::memcpy(&temp.Velocity_x, &buffer[offset + 12], 4);
 		std::memcpy(&temp.Velocity_y, &buffer[offset + 16], 4);
-		temp.Velocity_x = ntohf(temp.Velocity_x);
-		temp.Velocity_y = ntohf(temp.Velocity_y);
+		temp.Velocity_x = ntohl(temp.Velocity_x);
+		temp.Velocity_y = ntohl(temp.Velocity_y);
 
 		// Rotation
 		std::memcpy(&temp.Rotation, &buffer[offset + 20], 4);
-		temp.Rotation = ntohf(temp.Rotation);
+		temp.Rotation = ntohl(temp.Rotation);
 
 		// Scale
 		std::memcpy(&temp.Scale_x, &buffer[offset + 24], 4);
 		std::memcpy(&temp.Scale_y, &buffer[offset + 28], 4);
-		temp.Scale_x = ntohf(temp.Scale_x);
-		temp.Scale_y = ntohf(temp.Scale_y);
+		temp.Scale_x = ntohl(temp.Scale_x);
+		temp.Scale_y = ntohl(temp.Scale_y);
 
 		// Time Stamp
 		std::memcpy(&temp.time_of_creation, &buffer[offset + 32], 4);
-		temp.time_of_creation = ntohf(temp.time_of_creation);
+		temp.time_of_creation = ntohl(temp.time_of_creation);
 
 		Asteroid_map[asteroid_ID] = temp;
 		new_asteroids.push_back({ asteroid_ID, temp });
 		bytes_read += 36;
+		offset += 36;
 	}
 	return bytes_read;
 }

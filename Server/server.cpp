@@ -1222,6 +1222,7 @@ void WriteNewAsteroids(std::ostream& output)
 		memcpy(&netTimeCreated, &asteroid.time_of_creation, sizeof(float));
 		netTimeCreated = htonl(netTimeCreated);
 		output.write(reinterpret_cast<const char*>(&netTimeCreated), sizeof(uint32_t));
+		std::cout << "Read asteroid info with position (" << asteroid.Position_x << ", " << asteroid.Position_y << ")" << std::endl;
 	}
 }
 
@@ -1371,7 +1372,7 @@ void WriteAsteroidCollision(std::ostream& output) {
 		output.write(reinterpret_cast<const char*>(&netAsteroidID), sizeof(uint32_t));
 
 	}
-
+	asteroidCollisions.clear();
 }
 
 
