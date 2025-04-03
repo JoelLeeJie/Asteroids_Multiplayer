@@ -1113,7 +1113,6 @@ void GameStateAsteroidsUpdate(void)
 					//std::cout << "Asteroid ID: " << Asteroid_ID << std::endl;
 					onValueChange = true;
 				}
-				PrintString(std::to_string(asteroid_destruction.size()));
 
 				for (std::pair<unsigned int, unsigned int>& obj_ID : bullet_destruction) {
 					DestroyInstanceByID(obj_ID.second, TYPE_BULLET, obj_ID.first);
@@ -1188,14 +1187,17 @@ void GameStateAsteroidsUpdate(void)
 				{
 					pInst->posCurr = pInst->posPrev = { 0, 0 };
 					pInst->velCurr = { 0, 0 };
+					//if my ship collided with an asteroid, decrement my life.
+					if (pInst == spShip)
+					{
+						sShipLives--;
+						PrintString("Collided");
+					}
+					break;
 				}
 			}
-			//if my ship collided with an asteroid, decrement my life.
-			if (pInst == spShip)
-			{
-				sShipLives--;
-			}
 		}
+		
 
 		if (pInst->pObject->type == TYPE_BULLET && pInst->Player_ID != this_player.player_ID)
 		{
@@ -1248,7 +1250,7 @@ void GameStateAsteroidsUpdate(void)
 	player_hit.clear();
 	asteroid_destruction.clear();
 	bullet_destruction.clear();
-
+	all_collisions.clear();
 
 	// =====================================================================
 	// calculate the matrix for all objects

@@ -133,10 +133,10 @@ std::string Write_PlayerTransform(Player player) {
 	std::memcpy(&accY, &Yacc, 4);
 	std::memcpy(&rot2, &rot, 4);
 
-	std::cout << "sending this player transform: =============================\n";
+	/*std::cout << "sending this player transform: =============================\n";
 	std::cout << "POS: x: " << posX << " y: " << posY << std::endl;
 	std::cout << "VEL: x: " << velX << " y: " << velY << std::endl;
-	std::cout << "rotation: " << rot2 << std::endl;
+	std::cout << "rotation: " << rot2 << std::endl;*/
 
 	return result;
 
@@ -627,6 +627,7 @@ int Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, s
 		// Player
 		if (obj_ID == 0) {
 			// Player Response
+			PrintString("CollisionDetected");
 			player_hit.emplace(Player_ID);
 			players[Player_ID].Position_X = 0.f;
 			players[Player_ID].Position_Y = 0.f;
