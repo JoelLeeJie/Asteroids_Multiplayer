@@ -314,6 +314,15 @@ int Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsigne
 		std::memcpy(&player_ID, &buffer[offset], 2);
 		player_ID = ntohs(player_ID);
 
+		{
+			std::lock_guard<std::mutex> player_lock{ this_player_lock };
+			if (player_ID == this_player.player_ID) {
+				offset += 32;
+				bytes_read += 32;
+				continue;
+			}
+		}
+		
 		uint16_t num_bullets = 0;
 		std::memcpy(&num_bullets, &buffer[offset + 2], 2);
 		num_bullets = ntohs(num_bullets);
@@ -492,9 +501,9 @@ int Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, Ast
 	num_asteroids = ntohs(num_asteroids);
 
 	int bytes_read = 2;
-
+	int offset = 2;
 	for (int i = 0; i < num_asteroids; i++) {
-		int offset = 2 + i * 36;
+		
 		Asteroids temp{};
 		int asteroid_ID;
 
@@ -507,34 +516,36 @@ int Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, Ast
 		// Position
 		std::memcpy(&temp.Position_x, &buffer[offset + 4], 4);
 		std::memcpy(&temp.Position_y, &buffer[offset + 8], 4);
-		temp.Position_x = ntohf(temp.Position_x);
-		temp.Position_y = ntohf(temp.Position_y);
-		temp.Position_x *= AEGfxGetWinMaxX();
-		temp.Position_y *= AEGfxGetWinMaxY();
+		temp.Position_x = ntohl(temp.Position_x);
+		temp.Position_y = ntohl(temp.Position_y);
+		std::cout << "Read asteroid info with position (" << temp.Position_x << ", " << temp.Position_y << ")" << std::endl;
+		temp.Position_x *= AEGfxGetWinMaxX() / 2;
+		temp.Position_y *= AEGfxGetWinMaxY() / 2;
 
 		// Velocity
 		std::memcpy(&temp.Velocity_x, &buffer[offset + 12], 4);
 		std::memcpy(&temp.Velocity_y, &buffer[offset + 16], 4);
-		temp.Velocity_x = ntohf(temp.Velocity_x);
-		temp.Velocity_y = ntohf(temp.Velocity_y);
+		temp.Velocity_x = ntohl(temp.Velocity_x);
+		temp.Velocity_y = ntohl(temp.Velocity_y);
 
 		// Rotation
 		std::memcpy(&temp.Rotation, &buffer[offset + 20], 4);
-		temp.Rotation = ntohf(temp.Rotation);
+		temp.Rotation = ntohl(temp.Rotation);
 
 		// Scale
 		std::memcpy(&temp.Scale_x, &buffer[offset + 24], 4);
 		std::memcpy(&temp.Scale_y, &buffer[offset + 28], 4);
-		temp.Scale_x = ntohf(temp.Scale_x);
-		temp.Scale_y = ntohf(temp.Scale_y);
+		temp.Scale_x = ntohl(temp.Scale_x);
+		temp.Scale_y = ntohl(temp.Scale_y);
 
 		// Time Stamp
 		std::memcpy(&temp.time_of_creation, &buffer[offset + 32], 4);
-		temp.time_of_creation = ntohf(temp.time_of_creation);
+		temp.time_of_creation = ntohl(temp.time_of_creation);
 
 		Asteroid_map[asteroid_ID] = temp;
 		new_asteroids.push_back({ asteroid_ID, temp });
 		bytes_read += 36;
+		offset += 36;
 	}
 	return bytes_read;
 }

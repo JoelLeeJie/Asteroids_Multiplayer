@@ -1069,9 +1069,6 @@ void GameStateAsteroidsUpdate(void)
 			else if (Command_ID == SERVER_ASTEROID_CREATION) {
 				if (bytes_read >= buffer.size()) break; //No more things to read.
 				std::string result = buffer.substr(bytes_read);
-				if (!result.size()) {
-					continue;
-				}
 				bytes_read += Read_AsteroidCreations(result, Asteroid_map, new_asteroids);
 
 				for (std::pair<unsigned int, Asteroids>& Asteroided : new_asteroids) {
@@ -1084,9 +1081,9 @@ void GameStateAsteroidsUpdate(void)
 						auto temp = it->second;
 
 						AEVec2	sca = { temp.Scale_x, temp.Scale_y },
-							pos = { temp.Position_x * AEGfxGetWinMaxX(), temp.Position_y * AEGfxGetWinMaxY() },
+							pos = { temp.Position_x , temp.Position_y  },
 							vel = { temp.Velocity_x, temp.Velocity_y };
-
+						std::cout << "Creating asteroid with position (" << pos.x << ", " << pos.y << ")" << std::endl;
 						gameObjInstCreate(this_player.player_ID, Asteroided.first, TYPE_ASTEROID, &sca, &pos, &vel, 0.0f);
 						sGameObjInstNum++;
 					}
