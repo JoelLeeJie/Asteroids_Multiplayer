@@ -956,6 +956,9 @@ void GameStateAsteroidsUpdate(void)
 			if (Command_ID == 0x4) { //server_player_transform
 				if (bytes_read >= buffer.size()) break; //No more things to read.
 				std::string result = buffer.substr(bytes_read); // Starts at index 1 and goes to the end
+				if (result.size()) {
+					continue;
+				}
 				bytes_read += Read_PlayersTransform(result, players, new_players); //add to player map, lets say 5
 				//so now bytes read will be 6
 
@@ -980,13 +983,13 @@ void GameStateAsteroidsUpdate(void)
 
 
 			}
-			else if (Command_ID == SERVER_BULLET_CREATION) { //server_bullet_transform
+			else if (Command_ID == 0x5) { //server_bullet_transform
 				if (bytes_read >= buffer.size()) break; //No more things to read.
 				std::string result = buffer.substr(bytes_read); // Starts at index 1 and goes to the end
 				// test if msg is empty
-				/*if (result.size()) {
+				if (result.size()) {
 					continue;
-				}*/
+				}
 				bytes_read += Read_New_Bullets(result, all_bullets, players, new_otherbullets);
 
 				for (std::pair<unsigned int, unsigned int> one_bullet : new_otherbullets) {
@@ -1014,12 +1017,15 @@ void GameStateAsteroidsUpdate(void)
 				}
 
 			}
-			else if (Command_ID == SERVER_ASTEROID_CREATION) {
+			else if (Command_ID == 0x6) {
 				if (bytes_read >= buffer.size()) break; //No more things to read.
 				std::string result = buffer.substr(bytes_read);
+				if (result.size()) {
+					continue;
+				}
 				bytes_read += Read_AsteroidCreations(result, Asteroid_map, new_asteroids);
 
-				for (std::pair<unsigned int, Asteroids> Asteroided : new_asteroids) {
+				for (std::pair<unsigned int, Asteroids>& Asteroided : new_asteroids) {
 
 					//check whether the Asteroid exisits in the all Asteroid map or not
 					auto it = Asteroid_map.find(Asteroided.first);
@@ -1037,9 +1043,12 @@ void GameStateAsteroidsUpdate(void)
 					}
 				}
 			}
-			else if (Command_ID == SERVER_COLLISION) {
+			else if (Command_ID == 0x7) {
 				if (bytes_read >= buffer.size()) break; //No more things to read.
 				std::string result = buffer.substr(bytes_read);
+				if (result.size()) {
+					continue;
+				}
 				bytes_read += Read_AsteroidDestruction(result, all_bullets, Asteroid_map, bullet_destruction, asteroid_destruction);
 
 				for (unsigned int Asteroid_ID : asteroid_destruction) {
