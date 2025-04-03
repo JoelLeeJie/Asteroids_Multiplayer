@@ -50,8 +50,8 @@ std::string Write_PlayerTransform(Player player) {
 	std::memcpy(&Yacc, &player.Acceleration_Y, 4);
 
 	std::memcpy(&rot, &player.Rotation, 4);
-	
-	
+
+
 	Xpos = htonl(Xpos);
 	Ypos = htonl(Ypos);
 	Xvel = htonl(Xvel);
@@ -297,7 +297,7 @@ std::string Write_NewBullet(unsigned int session_ID, std::map<unsigned int, Bull
 		std::memcpy(&result[offset + 20], &rot, 4);
 		std::memcpy(&result[offset + 24], &time_stamp, 4);
 
-		
+
 
 		j++;
 
@@ -345,8 +345,6 @@ int Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsigne
 		std::memcpy(&player_ID, &buffer[offset], 2);
 		player_ID = ntohs(player_ID);
 
-		
-		
 		uint16_t num_bullets = 0;
 		std::memcpy(&num_bullets, &buffer[offset + 2], 2);
 		num_bullets = ntohs(num_bullets);
@@ -538,7 +536,7 @@ int Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, Ast
 	int bytes_read = 2;
 	int offset = 2;
 	for (int i = 0; i < num_asteroids; i++) {
-		
+
 		Asteroids temp{};
 		int asteroid_ID;
 
@@ -552,13 +550,13 @@ int Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, Ast
 		uint32_t posx{}, posy{};
 		std::memcpy(&posx, &buffer[offset + 4], 4);
 		std::memcpy(&posy, &buffer[offset + 8], 4);
-		
+
 		posx = ntohl(posx);
 		posy = ntohl(posy);
 
 		std::memcpy(&temp.Position_x, &posx, 4);
 		std::memcpy(&temp.Position_y, &posy, 4);
-		
+
 		temp.Position_x *= AEGfxGetWinMaxX() / 2;
 		temp.Position_y *= AEGfxGetWinMaxY() / 2;
 
@@ -583,7 +581,7 @@ int Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, Ast
 		uint32_t sca_x{}, sca_y{};
 		std::memcpy(&sca_x, &buffer[offset + 24], 4);
 		std::memcpy(&sca_y, &buffer[offset + 28], 4);
-		
+
 		sca_x = ntohl(sca_x);
 		sca_y = ntohl(sca_y);
 
@@ -606,9 +604,9 @@ int Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, Ast
 	return bytes_read;
 }
 
-int Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>& all_bullets, 
-							std::map<unsigned int, Asteroids>& Asteroid_map, std::vector<std::pair<unsigned int, unsigned int>>& bullet_destruction, 
-							std::vector<unsigned int>& asteroid_destruction)
+int Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>& all_bullets,
+	std::map<unsigned int, Asteroids>& Asteroid_map, std::vector<std::pair<unsigned int, unsigned int>>& bullet_destruction,
+	std::vector<unsigned int>& asteroid_destruction)
 {
 	// Check empty string
 	if (buffer.empty()) {
@@ -627,7 +625,7 @@ int Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, s
 	num_col = ntohs(num_col);
 
 	int bytes_read = 2;
-	
+
 	for (int i = 0; i < num_col; i++) {
 		int offset = 2 + i * 10;
 
@@ -780,24 +778,38 @@ int InitializeUDP()
 
 	//==Getting address information.
 	addrinfo* info_udp = nullptr;
-	errorCode = getaddrinfo(hostname, client_udp_portString.c_str(), &hints_udp, &info_udp);
-	if ((NO_ERROR != errorCode) || (nullptr == info_udp))
+	/*if ((NO_ERROR != errorCode) || (nullptr == info_udp))
 	{
 		std::cerr << "getaddrinfo() failed." << std::endl;
 		WSACleanup();
 		return errorCode;
-	}
+	}*/
 
 	/*
 		Binding of UDP socket to current ip address
 	*/
-	if (bind(udp_socket, info_udp->ai_addr, static_cast<int>(info_udp->ai_addrlen)) != NO_ERROR) {
-		std::cerr << "Bind failed" << std::endl;
-		closesocket(udp_socket);
-		udp_socket = INVALID_SOCKET;
-		WSACleanup();
-		return errorCode;
-	}
+	int offset = 0;
+	do
+	{
+		int client_port_num = std::stoi(client_udp_portString);
+		errorCode = getaddrinfo(hostname, std::to_string(client_port_num + offset).c_str(), &hints_udp, &info_udp);
+		offset++;
+		//Retried 30 times also cannot.
+		if (offset > 30)
+		{
+			std::cerr << "getaddrinfo() failed, or unable to bind udp socket." << std::endl;
+			WSACleanup();
+			return errorCode;
+		}
+	} while (bind(udp_socket, info_udp->ai_addr, static_cast<int>(info_udp->ai_addrlen)) != NO_ERROR);
+	
+
+
+	/*closesocket(udp_socket);
+	udp_socket = INVALID_SOCKET;
+	WSACleanup();
+	return errorCode;*/
+
 
 	// Enable non-blocking I/O on the udp socket.
 	u_long enable = 1;
