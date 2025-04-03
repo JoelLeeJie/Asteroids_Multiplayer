@@ -969,6 +969,7 @@ void GameStateAsteroidsUpdate(void)
 
 		if (all_collisions.size()) {
 			message_to_SERVER += Write_AsteroidCollision(this_player.player_ID, all_collisions);
+			PrintString("CollisionWritten");
 		}
 
 		//std::cout << message_to_SERVER.c_str();
