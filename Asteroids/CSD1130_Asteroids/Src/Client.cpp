@@ -133,10 +133,10 @@ std::string Write_PlayerTransform(Player player) {
 	std::memcpy(&accY, &Yacc, 4);
 	std::memcpy(&rot2, &rot, 4);
 
-	/*std::cout << "sending this player transform: =============================\n";
-	std::cout << "POS: x: " << posX << " y: " << posY << std::endl;
-	std::cout << "VEL: x: " << velX << " y: " << velY << std::endl;
-	std::cout << "rotation: " << rot2 << std::endl;*/
+	//std::cout << "sending this player transform: =============================\n";
+	//std::cout << "POS: x: " << posX << " y: " << posY << std::endl;
+	//std::cout << "VEL: x: " << velX << " y: " << velY << std::endl;
+	//std::cout << "rotation: " << rot2 << std::endl;
 
 	return result;
 
@@ -167,11 +167,15 @@ int Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& pl
 
 	uint16_t num_players = 0;
 	std::memcpy(&num_players, &buffer[0], 2);
+	std::cout << "num_players before ntohs: " << num_players << std::endl;
 	num_players = ntohs(num_players);
-
+	int int_num_player = num_players;
+	
 	bytes_read = 2;
 
-	for (int i = 0; i < (int)num_players; i++) {
+	std::cout << "int_num_player: " << int_num_player << std::endl;
+
+	for (int i = 0; i < int_num_player; i++) {
 
 		Player player;
 
@@ -223,8 +227,13 @@ int Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& pl
 		}
 		else {
 
-			//if the player exists, just update the value
-			it->second = player;
+			//update other people, dont update yourself again
+			if (it->first != this_player.player_ID) {
+				//if the player exists, just update the value
+				it->second = player;
+			}
+
+
 
 		}
 
@@ -235,7 +244,7 @@ int Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& pl
 		//std::cout << "rotation: " << player.Rotation << std::endl;
 
 	}
-	std::cout << "Read_PlayersTransform | bytes read: " << bytes_read << std::endl;
+	std::cout << "Read_PlayersTransform | bytes read: " << bytes_read << std::endl; //should be 32
 
 	return bytes_read;
 

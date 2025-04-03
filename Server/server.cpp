@@ -365,13 +365,17 @@ void GameProgram()
 			std::ostringstream messageStream(std::ios::binary);
 
 			// Compose message content
+			WritePlayerTransforms(messageStream);
+			WriteBullet(messageStream);
 			WriteNewAsteroids(messageStream);
 			WriteAsteroidCollision(messageStream);
-			WriteBullet(messageStream);
-			WritePlayerTransforms(messageStream);
+			
 
 			std::string message = messageStream.str();
-
+			if (message.size() > 1000)
+			{
+				std::cout << "hello";
+			}
 			std::lock_guard<std::mutex> map_lock{ session_map_lock };
 			for (auto& [_, session] : player_Session_Map) {
 				session.SendLongMessage(message);  // queues packet for reliable sending
@@ -1060,14 +1064,31 @@ void WriteBullet(std::ostream& output)
 	uint16_t netNumPlayers = htons(numPlayers);
 	output.write(reinterpret_cast<const char*>(&netNumPlayers), sizeof(uint16_t));
 
-	for (const auto& [playerID, bullets] : bulletMap)
+	std::vector<int> list_of_player_ids{};
 	{
-		uint16_t netPlayerID = htons(playerID);
+		std::lock_guard<std::mutex> map_lock{ session_map_lock };
+		for (auto iter_pair : player_Session_Map)
+		{
+			list_of_player_ids.push_back(iter_pair.first);
+		}
+	}
+	for (int p_id : list_of_player_ids)
+	{
+		uint16_t netPlayerID = htons(p_id);
 		output.write(reinterpret_cast<const char*>(&netPlayerID), sizeof(uint16_t));
-		uint16_t numBullets = static_cast<uint16_t>(bullets.size());
+
+		auto iter = bulletMap.find(p_id);
+		if (iter == bulletMap.end())
+		{
+			uint16_t numBullets = 0;
+			uint16_t netNumBullets = htons(numBullets);
+			output.write(reinterpret_cast<const char*>(&netNumBullets), sizeof(uint16_t));
+			continue;
+		}
+		uint16_t numBullets = iter->second.size();
 		uint16_t netNumBullets = htons(numBullets);
 		output.write(reinterpret_cast<const char*>(&netNumBullets), sizeof(uint16_t));
-
+		auto& bullets = iter->second;
 		for (const Bullet& bullet : bullets)
 		{
 
@@ -1274,6 +1295,7 @@ void WritePlayerTransforms(std::ostream& output) {
 	// num of players
 	uint16_t numPlayers = static_cast<uint16_t>(playerTransforms.size());
 	uint16_t netNumPlayers = htons(numPlayers);
+	std::cout << "netNumPlayers: " << netNumPlayers << std::endl;
 	output.write(reinterpret_cast<const char*>(&netNumPlayers), sizeof(uint16_t));
 
 	for (const auto& [playerID, transform] : playerTransforms) {

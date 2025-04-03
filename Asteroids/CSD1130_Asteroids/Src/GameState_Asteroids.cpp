@@ -1001,7 +1001,7 @@ void GameStateAsteroidsUpdate(void)
 		continue;
 	}
 
-
+	std::cout << "\n\n";
 	if (!buffer.empty()) {
 
 		//we need to split first (ROLL EYE)
@@ -1014,16 +1014,20 @@ void GameStateAsteroidsUpdate(void)
 			uint8_t Command_ID = buffer[bytes_read]; //lets say 0
 			bytes_read++;
 			// reads 5, read next command
-
+			PrintString(std::to_string(bytes_read));
 			if (Command_ID == SERVER_PLAYER_TRANSFORM) { //server_player_transform
+
+				std::cout << "SERVER_PLAYER_TRANSFORM\n";
 				if (bytes_read >= buffer.size()) break; //No more things to read.
 				std::string result = buffer.substr(bytes_read); // Starts at index 1 and goes to the end
 				//if (!result.size()) {
 				//	continue;
 				//}
-				bytes_read += Read_PlayersTransform(result, players, new_players); //add to player map, lets say 5
-				//so now bytes read will be 6
+				int tempp = Read_PlayersTransform(result, players, new_players); //add to player map, lets say 5
+				std::cout << "tempp size: " << tempp << std::endl;
 
+				//so now bytes read will be 6
+				bytes_read += tempp;
 				//create new players
 				for (unsigned int player : new_players) {
 
@@ -1043,9 +1047,12 @@ void GameStateAsteroidsUpdate(void)
 					}
 				}
 
+				std::cout << "SERVER_PLAYER_TRANSFORM END\n";
+
 
 			}
 			else if (Command_ID == SERVER_BULLET_CREATION) { //server_bullet_transform
+
 				if (bytes_read >= buffer.size()) break; //No more things to read.
 				std::string result = buffer.substr(bytes_read); // Starts at index 1 and goes to the end
 				// test if msg is empty
@@ -1078,8 +1085,12 @@ void GameStateAsteroidsUpdate(void)
 
 				}
 
+
+
 			}
 			else if (Command_ID == SERVER_ASTEROID_CREATION) {
+
+				std::cout << "SERVER_ASTEROID_CREATION\n";
 				if (bytes_read >= buffer.size()) break; //No more things to read.
 				std::string result = buffer.substr(bytes_read);
 				bytes_read += Read_AsteroidCreations(result, Asteroid_map, new_asteroids);
@@ -1101,8 +1112,13 @@ void GameStateAsteroidsUpdate(void)
 						sGameObjInstNum++;
 					}
 				}
+
+				std::cout << "SERVER_ASTEROID_CREATION END\n";
+
 			}
 			else if (Command_ID == SERVER_COLLISION) {
+
+				std::cout << "SERVER_COLLISION\n";
 				if (bytes_read >= buffer.size()) break; //No more things to read.
 				std::string result = buffer.substr(bytes_read);
 				if (!result.size()) {
@@ -1121,10 +1137,15 @@ void GameStateAsteroidsUpdate(void)
 					//std::cout << "Bullet ID: " << obj_ID.second << std::endl;
 					onValueChange = true;
 				}
+
+				std::cout << "SERVER_COLLISION END\n";
 			}
 		}
 
 	}
+
+	std::cout << "I AM HERE 5\n\n\n";
+
 	
 	/////////////////////////////////////////////////////////
 	// RESPONSES                                           //
@@ -1244,6 +1265,8 @@ void GameStateAsteroidsUpdate(void)
 		}
 
 	}
+
+	std::cout << "I AM HERE 6\n";
 
 	////clear the map for new studd since we already create and update the values already
 	new_otherbullets.clear();
