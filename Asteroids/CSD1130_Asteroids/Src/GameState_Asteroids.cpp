@@ -174,7 +174,6 @@ void				Helper_Wall_Collision();
 
 auto program_start = std::chrono::steady_clock::now(); // Starts at 0
 
-unsigned int mySession_ID = -1; //random first
 
 std::map<unsigned int, Player> players;
 std::map<unsigned int, Bullet> new_bullets;
@@ -186,6 +185,7 @@ std::map<unsigned int, Asteroids> Asteroid_map;
 std::vector<std::pair<unsigned int, Asteroids>> new_asteroids;
 std::vector<CollisionEvent> all_collisions;
 std::vector<unsigned int> asteroid_destruction;
+std::set<unsigned int> player_hit;
 std::vector<std::pair<unsigned int, unsigned int>> bullet_destruction;
 
 float get_TimeStamp() {
@@ -458,6 +458,8 @@ void GameStateAsteroidsUpdate(void)
 			std::string start_game{ (char)START_GAME };
 			this_player.SendLongMessage(start_game);
 		}
+		
+		
 		//==Check for a START_GAME command from server.
 		//No message received yet.
 		if (!this_player.is_recv_message_complete || this_player.recv_buffer.empty())
@@ -481,6 +483,10 @@ void GameStateAsteroidsUpdate(void)
 		//Since buffer is cleared.
 		this_player.is_recv_message_complete = false;
 		isGameStarted = true;
+		{
+			spShip->Player_ID = this_player.player_ID;
+			spShip->Object_ID = 0;
+		}
 	}
 
 	// =========================================================
@@ -843,8 +849,13 @@ void GameStateAsteroidsUpdate(void)
 	//UPDATE THE NEW PLAYER VALUES TO THE PLAYERS MAP
 	//Not sure about the position, if we should update now or update later together after receving?
 	//read the prev pos, later after receiving, we will update together
-
-	auto it = players.find(mySession_ID);
+	std::map<unsigned int, Player>::iterator it;
+	
+	{
+		std::lock_guard<std::mutex> player_lock{ this_player_lock };
+		it = players.find(this_player.player_ID);
+	}
+	
 
 	if (it != players.end()) {
 
@@ -1142,11 +1153,13 @@ void GameStateAsteroidsUpdate(void)
 		if ((pInst->flag & FLAG_ACTIVE) == 0)
 			continue;
 
-		if (pInst->Player_ID == this_player.player_ID) continue; //we are updating other people NEW stuff here
+		//if (pInst->Player_ID == this_player.player_ID) continue; //we are updating other people NEW stuff here
+
+		
 
 		//update existing other players
 		// check if the object is a ship (make sure the ship is others, not yours)
-		if (pInst->pObject->type == TYPE_SHIP && pInst->Player_ID != this_player.player_ID)
+		if (pInst->pObject->type == TYPE_SHIP && pInst!= spShip)
 		{
 			//double check the player exists or not
 			auto it = players.find(pInst->Player_ID);
@@ -1164,6 +1177,27 @@ void GameStateAsteroidsUpdate(void)
 
 			}
 
+		}
+
+		/*
+			Response on ships that collided with asteroids.
+		*/
+		if (pInst->pObject->type == TYPE_SHIP)
+		{
+			for (unsigned int player_collision_id : player_hit)
+			{
+				//Collided with asteroid, so reset position.
+				if (pInst->Player_ID == player_collision_id)
+				{
+					pInst->posCurr = pInst->posPrev = { 0, 0 };
+					pInst->velCurr = { 0, 0 };
+				}
+			}
+			//if my ship collided with an asteroid, decrement my life.
+			if (pInst == spShip)
+			{
+				sShipLives--;
+			}
 		}
 
 		if (pInst->pObject->type == TYPE_BULLET && pInst->Player_ID != this_player.player_ID)
@@ -1214,6 +1248,7 @@ void GameStateAsteroidsUpdate(void)
 	new_otherbullets.clear();
 	new_players.clear();
 	new_asteroids.clear();
+	player_hit.clear();
 	asteroid_destruction.clear();
 	bullet_destruction.clear();
 

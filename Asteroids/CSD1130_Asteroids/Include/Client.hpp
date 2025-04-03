@@ -12,6 +12,7 @@
 #include <queue>
 #include <mutex>
 #include "..\Utility.hpp"
+#include <set>
 /*
 	Represents a player session, where communications with the server is controlled through this.
 	Note: addrDest needs to be set before this struct can be used for sending/receiving.
@@ -141,6 +142,7 @@ extern std::map<unsigned int, Bullet> new_bullets; //list of bullets created by 
 extern std::vector<std::pair<unsigned int, Asteroids>> new_asteroids;
 extern std::vector<std::pair<unsigned int, unsigned int>> new_otherbullets; //list of bullets created by other players
 
+
 extern std::map<unsigned int, Player> players; //not used yet
 extern std::map<unsigned int, std::map<unsigned int, Bullet>> all_bullets; //all the bullets
 extern std::map<unsigned int, Asteroids> Asteroid_map;
@@ -148,6 +150,7 @@ extern std::map<unsigned int, Asteroids> Asteroid_map;
 extern std::vector<CollisionEvent> all_collisions;
 extern std::vector<std::pair<unsigned int, unsigned int>> bullet_destruction;
 extern std::vector<unsigned int> asteroid_destruction;
+extern std::set<unsigned int> player_hit;
 
 std::string Write_PlayerTransform(Player player);
 int Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& player_map, std::vector<unsigned int>& players_to_create);

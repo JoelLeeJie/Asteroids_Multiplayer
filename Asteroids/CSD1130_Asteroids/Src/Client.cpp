@@ -585,8 +585,7 @@ int Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, s
 		// Player
 		if (obj_ID == 0) {
 			// Player Response
-
-			// Resetting player
+			player_hit.emplace(Player_ID);
 			players[Player_ID].Position_X = 0.f;
 			players[Player_ID].Position_Y = 0.f;
 			players[Player_ID].Velocity_X = 0.f;
