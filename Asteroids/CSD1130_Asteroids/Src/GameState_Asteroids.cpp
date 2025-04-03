@@ -1035,7 +1035,7 @@ void GameStateAsteroidsUpdate(void)
 						auto temp = it->second;
 
 						AEVec2	sca = { temp.Scale_x, temp.Scale_y },
-							pos = { temp.Position_x, temp.Position_y },
+							pos = { temp.Position_x * AEGfxGetWinMaxX(), temp.Position_y * AEGfxGetWinMaxY() },
 							vel = { temp.Velocity_x, temp.Velocity_y };
 
 						gameObjInstCreate(this_player.player_ID, Asteroided.first, TYPE_ASTEROID, &sca, &pos, &vel, 0.0f);

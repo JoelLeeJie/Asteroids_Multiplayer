@@ -506,6 +506,8 @@ int Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, Ast
 		std::memcpy(&temp.Position_y, &buffer[offset + 8], 4);
 		temp.Position_x = ntohf(temp.Position_x);
 		temp.Position_y = ntohf(temp.Position_y);
+		temp.Position_x *= AEGfxGetWinMaxX();
+		temp.Position_y *= AEGfxGetWinMaxY();
 
 		// Velocity
 		std::memcpy(&temp.Velocity_x, &buffer[offset + 12], 4);
