@@ -289,13 +289,13 @@ std::string Write_NewBullet(unsigned int session_ID, std::map<unsigned int, Bull
 		rot = htonl(rot);
 		bullet_id = htonl(bullet_id);
 
-		std::memcpy(&result[offset], &Xpos, 4);
-		std::memcpy(&result[offset + 4], &Ypos, 4);
-		std::memcpy(&result[offset + 8], &Xvel, 4);
-		std::memcpy(&result[offset + 12], &Yvel, 4);
-		std::memcpy(&result[offset + 16], &rot, 4);
-		std::memcpy(&result[offset + 20], &time_stamp, 4);
-		std::memcpy(&result[offset + 24], &bullet_id, 4);
+		std::memcpy(&result[offset], &bullet_id, 4);
+		std::memcpy(&result[offset + 4], &Xpos, 4);
+		std::memcpy(&result[offset + 8], &Ypos, 4);
+		std::memcpy(&result[offset + 12], &Xvel, 4);
+		std::memcpy(&result[offset + 16], &Yvel, 4);
+		std::memcpy(&result[offset + 20], &rot, 4);
+		std::memcpy(&result[offset + 24], &time_stamp, 4);
 
 		
 
@@ -345,18 +345,21 @@ int Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsigne
 		std::memcpy(&player_ID, &buffer[offset], 2);
 		player_ID = ntohs(player_ID);
 
-		{
-			std::lock_guard<std::mutex> player_lock{ this_player_lock };
-			if (player_ID == this_player.player_ID) {
-				offset += 32;
-				bytes_read += 32;
-				continue;
-			}
-		}
+		
 		
 		uint16_t num_bullets = 0;
 		std::memcpy(&num_bullets, &buffer[offset + 2], 2);
 		num_bullets = ntohs(num_bullets);
+
+
+		{
+			std::lock_guard<std::mutex> player_lock{ this_player_lock };
+			if (player_ID == this_player.player_ID) {
+				offset += 4 + num_bullets * 28;
+				bytes_read += 4 + num_bullets * 28;
+				continue;
+			}
+		}
 
 		offset += 4; //if bullet num =1, offset here should be 7
 		bytes_read += 4;
@@ -398,8 +401,9 @@ int Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsigne
 			std::memcpy(&new_bullet.Velocity_Y, &Yvel, 4);
 			std::memcpy(&new_bullet.Rotation, &rot, 4);
 			std::memcpy(&new_bullet.Time_Stamp, &time_stamp, 4);
-
-
+			std::cout << "New Bullet with position (" << new_bullet.Position_X << ", " << new_bullet.Position_Y << ")" << std::endl;
+			std::cout << "New Bullet with velocity (" << new_bullet.Velocity_X << ", " << new_bullet.Velocity_Y << ")" << std::endl;
+			std::cout << "New Bullet with rotation (" << new_bullet.Rotation << ")" << std::endl;
 			auto it = bullets_map.find(static_cast<unsigned int>(player_ID)); //add it to the player id map
 
 			//if the player exists
