@@ -365,10 +365,10 @@ void GameProgram()
 			std::ostringstream messageStream(std::ios::binary);
 
 			// Compose message content
-			WriteBullet(messageStream);
 			WriteNewAsteroids(messageStream);
-			WritePlayerTransforms(messageStream);
 			WriteAsteroidCollision(messageStream);
+			WriteBullet(messageStream);
+			WritePlayerTransforms(messageStream);
 
 			std::string message = messageStream.str();
 

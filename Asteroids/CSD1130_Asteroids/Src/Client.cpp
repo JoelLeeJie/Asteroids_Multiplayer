@@ -560,7 +560,7 @@ int Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, s
 	num_col = ntohs(num_col);
 
 	int bytes_read = 2;
-
+	
 	for (int i = 0; i < num_col; i++) {
 		int offset = 2 + i * 10;
 
@@ -578,8 +578,9 @@ int Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, s
 		std::memcpy(&Asteroid_ID, &buffer[offset + 6], 4);
 		Asteroid_ID = ntohl(Asteroid_ID);
 
-		// Asteroid Response ( Deleting from Map )
+		// Asteroid Response ( Deleting from Map, delayed destruction )
 		Asteroid_map.erase(Asteroid_ID);
+		asteroid_destruction.push_back(Asteroid_ID);
 
 		// Player
 		if (obj_ID == 0) {
@@ -592,10 +593,6 @@ int Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, s
 			players[Player_ID].Velocity_Y = 0.f;
 			players[Player_ID].Acceleration_X = 0.f;
 			players[Player_ID].Acceleration_Y = 0.f;
-
-			// Asteroid Response ( Deleting from Map )
-			Asteroid_map.erase(Asteroid_ID);
-			asteroid_destruction.push_back(Asteroid_ID);
 		}
 		// Bullet
 		else if (obj_ID > 0) {
@@ -604,10 +601,7 @@ int Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, s
 			int bulletID = obj_ID;
 			all_bullets[Player_ID].erase(bulletID);
 
-			// Asteroid Response ( Deleting from Map )
-			Asteroid_map.erase(Asteroid_ID);
 			bullet_destruction.push_back({ Player_ID, bulletID });
-			asteroid_destruction.push_back(Asteroid_ID);
 		}
 
 		bytes_read += 10;
@@ -797,7 +791,7 @@ void HandleReceivedPackets(std::string data, int seq_or_ack_number)
 
 	if (command_ID == ACK)
 	{
-		PrintString(std::string("ACK RECV, Seq Num: ") + std::to_string(seq_or_ack_number));
+		//PrintString(std::string("ACK RECV, Seq Num: ") + std::to_string(seq_or_ack_number));
 		/*
 			Using ACK number, decide what to do with ACK.
 			If ACK == current sequence number, packet has been received successfully
@@ -915,7 +909,7 @@ void HandleReceivedPackets(std::string data, int seq_or_ack_number)
 		if (command_ID == COMMAND_COMPLETE) this_player.is_recv_message_complete = true;
 		else this_player.is_recv_message_complete = false; //Still need to wait for more packets.
 
-		PrintString("MESSAGE RECV, Seq Num: " + std::to_string(seq_or_ack_number) + " Data: " + data);
+		//PrintString("MESSAGE RECV, Seq Num: " + std::to_string(seq_or_ack_number) + " Data: " + data);
 	}
 
 }
@@ -985,7 +979,7 @@ void ReceiveSendMessages()
 			session.reliable_transfer.toSend = false;
 			data_to_write.push_back({ session.addrDest, data });
 
-			PrintString("MESSAGE SENT, Seq Num: " + std::to_string(session.reliable_transfer.current_sequence_number) + " Data: " + data);
+			//PrintString("MESSAGE SENT, Seq Num: " + std::to_string(session.reliable_transfer.current_sequence_number) + " Data: " + data);
 		}
 
 		{

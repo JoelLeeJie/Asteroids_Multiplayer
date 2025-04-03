@@ -1002,7 +1002,7 @@ void GameStateAsteroidsUpdate(void)
 			bytes_read++;
 			// reads 5, read next command
 
-			if (Command_ID == 0x4) { //server_player_transform
+			if (Command_ID == SERVER_PLAYER_TRANSFORM) { //server_player_transform
 				if (bytes_read >= buffer.size()) break; //No more things to read.
 				std::string result = buffer.substr(bytes_read); // Starts at index 1 and goes to the end
 				//if (!result.size()) {
@@ -1032,7 +1032,7 @@ void GameStateAsteroidsUpdate(void)
 
 
 			}
-			else if (Command_ID == 0x5) { //server_bullet_transform
+			else if (Command_ID == SERVER_BULLET_CREATION) { //server_bullet_transform
 				if (bytes_read >= buffer.size()) break; //No more things to read.
 				std::string result = buffer.substr(bytes_read); // Starts at index 1 and goes to the end
 				// test if msg is empty
@@ -1066,7 +1066,7 @@ void GameStateAsteroidsUpdate(void)
 				}
 
 			}
-			else if (Command_ID == 0x6) {
+			else if (Command_ID == SERVER_ASTEROID_CREATION) {
 				if (bytes_read >= buffer.size()) break; //No more things to read.
 				std::string result = buffer.substr(bytes_read);
 				if (!result.size()) {
@@ -1092,7 +1092,7 @@ void GameStateAsteroidsUpdate(void)
 					}
 				}
 			}
-			else if (Command_ID == 0x7) {
+			else if (Command_ID == SERVER_COLLISION) {
 				if (bytes_read >= buffer.size()) break; //No more things to read.
 				std::string result = buffer.substr(bytes_read);
 				if (!result.size()) {
@@ -1105,6 +1105,7 @@ void GameStateAsteroidsUpdate(void)
 					//std::cout << "Asteroid ID: " << Asteroid_ID << std::endl;
 					onValueChange = true;
 				}
+				PrintString(std::to_string(asteroid_destruction.size()));
 
 				for (std::pair<unsigned int, unsigned int>& obj_ID : bullet_destruction) {
 					DestroyInstanceByID(obj_ID.second, TYPE_BULLET, obj_ID.first);
@@ -1461,7 +1462,6 @@ void DestroyInstanceByID(int objectID, unsigned long type, int player_ID)
 		if (type == TYPE_ASTEROID) {
 			if (pInst->pObject->type == type && pInst->Object_ID == objectID)
 			{
-
 				gameObjInstDestroy(pInst);
 				sGameObjInstNum--;
 				return;
@@ -1470,7 +1470,6 @@ void DestroyInstanceByID(int objectID, unsigned long type, int player_ID)
 		else if (type == TYPE_BULLET) {
 			if (pInst->pObject->type == type && pInst->Object_ID == objectID && pInst->Player_ID == player_ID)
 			{
-
 				gameObjInstDestroy(pInst);
 				sGameObjInstNum--;
 				return;

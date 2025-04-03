@@ -134,16 +134,18 @@ struct CollisionEvent {
     float timestamp;
 };
 
-extern std::map<unsigned int, Player> players; //not used yet
+extern unsigned int bullet_ID; //start from 0
+
 extern std::vector<unsigned int> new_players;
 extern std::map<unsigned int, Bullet> new_bullets; //list of bullets created by player
-extern std::map<unsigned int, std::map<unsigned int, Bullet>> all_bullets; //all the bullets
-extern std::vector<std::pair<unsigned int, unsigned int>> new_otherbullets; //list of bullets created by other players
-extern unsigned int bullet_ID; //start from 0
-// 
-extern std::map<unsigned int, Asteroids> Asteroid_map;
-extern std::vector<CollisionEvent> all_collisions;
 extern std::vector<std::pair<unsigned int, Asteroids>> new_asteroids;
+extern std::vector<std::pair<unsigned int, unsigned int>> new_otherbullets; //list of bullets created by other players
+
+extern std::map<unsigned int, Player> players; //not used yet
+extern std::map<unsigned int, std::map<unsigned int, Bullet>> all_bullets; //all the bullets
+extern std::map<unsigned int, Asteroids> Asteroid_map;
+
+extern std::vector<CollisionEvent> all_collisions;
 extern std::vector<std::pair<unsigned int, unsigned int>> bullet_destruction;
 extern std::vector<unsigned int> asteroid_destruction;
 
