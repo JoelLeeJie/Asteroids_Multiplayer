@@ -323,25 +323,25 @@ void GameProgram()
 		
 		//Wait to receive all messages.
 		if (!hasReceivedAllMessage) continue;
-		std::vector<std::string> player_messages{};
+		std::vector<std::pair<int, std::string>> player_messages{};
 		{
 			std::lock_guard<std::mutex> map_lock{ session_map_lock };
 			for (auto& player_pair : player_Session_Map) {
 				if (!player_pair.second.is_recv_message_complete) {
 					continue;
 				}
-				player_messages.push_back(player_pair.second.recv_buffer);
+				player_messages.push_back(std::pair{ player_pair.first, player_pair.second.recv_buffer });
 				//Since it's been read, clear it. Since it's cleared, set completed to false.
 				player_pair.second.recv_buffer.clear();
 				player_pair.second.is_recv_message_complete = false;	
 			}
 		}
 		//Separate from the map iteration, to not hog the map mutex.
-		for (const std::string& message : player_messages)
+		for (const auto& player_pair : player_messages)
 		{
-			if (message.empty()) continue;
+			if (player_pair.second.empty()) continue;
 			char commandID;
-			std::stringstream msgStream(message);
+			std::stringstream msgStream(player_pair.second);
 			while (msgStream.rdbuf()->in_avail()) {
 				msgStream.read(reinterpret_cast<char*>(&commandID), sizeof(char));
 				switch (commandID) {
