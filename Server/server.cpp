@@ -205,7 +205,7 @@ const float			ASTEROID_MIN_SCALE_X = 10.0f;		// asteroid minimum scale x
 const float			ASTEROID_MAX_SCALE_X = 60.0f;		// asteroid maximum scale x
 const float			ASTEROID_MIN_SCALE_Y = 10.0f;		// asteroid minimum scale y
 const float			ASTEROID_MAX_SCALE_Y = 60.0f;		// asteroid maximum scale y
-const float			COLLISION_RADIUS_NDC = 0.2f;		// asteroid maximum scale y
+const float			COLLISION_RADIUS_NDC = 0.9f;		// asteroid maximum scale y
 
 // Containers
 std::map<int, Player_Session> player_Session_Map{}; // Used to manage interactions with players, including sending/receiving, automatic disconnection, reliable data transfer.
@@ -1147,7 +1147,7 @@ void CreateNewAsteroid()
 		// ndc coordinates, to be converted to scale in client side
 		posX = (static_cast<float>(rand()) / RAND_MAX) * 2.0f - 1.0f;
 		posY = (static_cast<float>(rand()) / RAND_MAX) * 2.0f - 1.0f;
-
+		//std::cout << "Position x: " << posX << "Position y: " << posY << std::endl;
 	} while (playerCollision(posX, posY));
 
 	velX = (float)(rand() % 200) - 100.f;
@@ -1190,6 +1190,7 @@ void WriteNewAsteroids(std::ostream& output)
 		output.write(reinterpret_cast<const char*>(&netID), sizeof(uint32_t));
 
 		uint32_t netPosX, netPosY, netVelX, netVelY, netRotation, netScaleX, netScaleY, netTimeCreated;
+
 
 		memcpy(&netPosX, &asteroid.Position_x, sizeof(float));
 		netPosX = htonl(netPosX);

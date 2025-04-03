@@ -443,6 +443,7 @@ void GameStateAsteroidsUpdate(void)
 {
 	static bool isGameStarted = false;
 	static bool pressStartOnce = false;
+
 	/*
 		Wait for the game to start.
 	*/
