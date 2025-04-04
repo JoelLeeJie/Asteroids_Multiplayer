@@ -200,7 +200,7 @@ struct AsteroidCollision {
 
 
 // Constants
-constexpr float AUTOMATIC_DISCONNECTION_TIMER = 4.f; // Time before server stops waiting for player response, and disconnects them.
+constexpr float AUTOMATIC_DISCONNECTION_TIMER = 2.f; // Time before server stops waiting for player response, and disconnects them.
 const float			ASTEROID_MIN_SCALE_X = 10.0f;		// asteroid minimum scale x
 const float			ASTEROID_MAX_SCALE_X = 60.0f;		// asteroid maximum scale x
 const float			ASTEROID_MIN_SCALE_Y = 10.0f;		// asteroid minimum scale y
@@ -307,17 +307,26 @@ void GameProgram()
 		// Waits until it receives all messages from clients
 		{
 			std::lock_guard<std::mutex> map_lock{ session_map_lock };
-			for (auto& player_pair : player_Session_Map)
+			for (auto iter = player_Session_Map.begin(); iter != player_Session_Map.end(); )
 			{
 				//If any player has an incomplete message, or an empty buffer, it means not all client messages have been received.
-				if (!player_pair.second.is_recv_message_complete) {
+
+				auto currTime = GetTime() - iter->second.time_last_packet_received;
+				if (currTime >= AUTOMATIC_DISCONNECTION_TIMER) {
+					iter = player_Session_Map.erase(iter);
+					continue;
+				}
+
+				if (!iter->second.is_recv_message_complete) {
 					hasReceivedAllMessage = false;
 					break;
 				}
-				if (player_pair.second.recv_buffer.empty()) {
+				if (iter->second.recv_buffer.empty()) {
 					hasReceivedAllMessage = false;
 					break;
 				}
+				
+				iter++;
 			}
 		}
 		
@@ -1059,7 +1068,7 @@ void WriteBullet(std::ostream& output)
 	char commandID = SERVER_BULLET_CREATION;
 	output.write(reinterpret_cast<const char*>(&commandID), sizeof(char));
 
-	uint16_t numPlayers = static_cast<uint16_t>(playerTransforms.size());
+	uint16_t numPlayers = static_cast<uint16_t>(player_Session_Map.size());
 	uint16_t netNumPlayers = htons(numPlayers);
 	output.write(reinterpret_cast<const char*>(&netNumPlayers), sizeof(uint16_t));
 
@@ -1332,6 +1341,8 @@ void WritePlayerTransforms(std::ostream& output) {
 		netVal = htonl(netVal);
 		output.write(reinterpret_cast<const char*>(&netVal), sizeof(uint32_t));
 	}
+
+	playerTransforms.clear();
 }
 
 /*
