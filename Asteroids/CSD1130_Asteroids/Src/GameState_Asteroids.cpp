@@ -191,7 +191,7 @@ std::vector<std::pair<unsigned int, unsigned int>> new_otherbullets; //list of b
 std::map<unsigned int, Asteroids> Asteroid_map;
 std::vector<std::pair<unsigned int, Asteroids>> new_asteroids;
 std::vector<CollisionEvent> all_collisions;
-std::vector<unsigned int> asteroid_destruction;
+std::vector<std::pair<unsigned int, unsigned int>> asteroid_destruction;
 std::set<unsigned int> player_hit;
 std::vector<std::pair<unsigned int, unsigned int>> bullet_destruction;
 std::vector<int> highscores;
@@ -1165,9 +1165,10 @@ void GameStateAsteroidsUpdate(void)
 				}
 				bytes_read += Read_AsteroidDestruction(result, all_bullets, Asteroid_map, bullet_destruction, asteroid_destruction);
 
-				for (unsigned int& Asteroid_ID : asteroid_destruction) {
-					DestroyInstanceByID(Asteroid_ID, TYPE_ASTEROID, this_player.player_ID);
-					highscores[this_player.player_ID] += 100;
+				for (std::pair<unsigned int, unsigned int>& Asteroid_ID : asteroid_destruction) {
+					DestroyInstanceByID(Asteroid_ID.first, TYPE_ASTEROID, this_player.player_ID);
+
+					highscores[Asteroid_ID.second] += 100;
 					//std::cout << "Asteroid ID: " << Asteroid_ID << std::endl;
 					onValueChange = true;
 				}

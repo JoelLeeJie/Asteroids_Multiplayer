@@ -616,7 +616,7 @@ int Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, Ast
 
 int Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>& all_bullets,
 	std::map<unsigned int, Asteroids>& Asteroid_map, std::vector<std::pair<unsigned int, unsigned int>>& bullet_destruction,
-	std::vector<unsigned int>& asteroid_destruction)
+	std::vector<std::pair<unsigned int, unsigned int>>& asteroid_destruction)
 {
 	// Check empty string
 	if (buffer.empty()) {
@@ -655,7 +655,7 @@ int Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, s
 
 		// Asteroid Response ( Deleting from Map, delayed destruction )
 		Asteroid_map.erase(Asteroid_ID);
-		asteroid_destruction.push_back(Asteroid_ID);
+		asteroid_destruction.push_back({Asteroid_ID, Player_ID});
 
 		// Player
 		if (obj_ID == 0) {
@@ -681,7 +681,6 @@ int Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, s
 
 		bytes_read += 10;
 	}
-
 	return bytes_read;
 }
 
