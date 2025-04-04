@@ -774,7 +774,7 @@ void HandleReceivedPackets()
 
 
 				Player_Session& session = player_Session_Map.find(client_player_id)->second;
-				session.time_last_packet_received = GetTime();
+				//session.time_last_packet_received = GetTime();
 				//Increment ack of last packet received.
 				if (session.reliable_transfer.ack_last_packet_received < packet.seq_or_ack_number)
 				{
