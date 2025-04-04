@@ -167,13 +167,13 @@ int Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& pl
 
 	uint16_t num_players = 0;
 	std::memcpy(&num_players, &buffer[0], 2);
-	std::cout << "num_players before ntohs: " << num_players << std::endl;
+	//std::cout << "num_players before ntohs: " << num_players << std::endl;
 	num_players = ntohs(num_players);
 	int int_num_player = num_players;
 	
 	bytes_read = 2;
 
-	std::cout << "int_num_player: " << int_num_player << std::endl;
+	//std::cout << "int_num_player: " << int_num_player << std::endl;
 
 	for (int i = 0; i < int_num_player; i++) {
 
@@ -244,7 +244,7 @@ int Read_PlayersTransform(std::string buffer, std::map<unsigned int, Player>& pl
 		//std::cout << "rotation: " << player.Rotation << std::endl;
 
 	}
-	std::cout << "Read_PlayersTransform | bytes read: " << bytes_read << std::endl; //should be 32
+	//std::cout << "Read_PlayersTransform | bytes read: " << bytes_read << std::endl; //should be 32
 
 	return bytes_read;
 
@@ -408,9 +408,10 @@ int Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsigne
 			std::memcpy(&new_bullet.Velocity_Y, &Yvel, 4);
 			std::memcpy(&new_bullet.Rotation, &rot, 4);
 			std::memcpy(&new_bullet.Time_Stamp, &time_stamp, 4);
-			std::cout << "New Bullet with position (" << new_bullet.Position_X << ", " << new_bullet.Position_Y << ")" << std::endl;
-			std::cout << "New Bullet with velocity (" << new_bullet.Velocity_X << ", " << new_bullet.Velocity_Y << ")" << std::endl;
-			std::cout << "New Bullet with rotation (" << new_bullet.Rotation << ")" << std::endl;
+			
+			//std::cout << "New Bullet with position (" << new_bullet.Position_X << ", " << new_bullet.Position_Y << ")" << std::endl;
+			//std::cout << "New Bullet with velocity (" << new_bullet.Velocity_X << ", " << new_bullet.Velocity_Y << ")" << std::endl;
+			//std::cout << "New Bullet with rotation (" << new_bullet.Rotation << ")" << std::endl;
 			auto it = bullets_map.find(static_cast<unsigned int>(player_ID)); //add it to the player id map
 
 			//if the player exists
@@ -453,7 +454,7 @@ int Read_New_Bullets(std::string buffer, std::map<unsigned int, std::map<unsigne
 		}
 
 	}
-	std::cout << "Read_New_Bullets | bytes read: " << bytes_read << std::endl;
+	//std::cout << "Read_New_Bullets | bytes read: " << bytes_read << std::endl;
 	return bytes_read;
 
 }
@@ -597,7 +598,7 @@ int Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, Ast
 		std::memcpy(&temp.Scale_x, &sca_x, 4);
 		std::memcpy(&temp.Scale_y, &sca_y, 4);
 
-		std::cout << "Read asteroid info with Scale (" << temp.Scale_x << ", " << temp.Scale_y << ")" << std::endl;
+		//std::cout << "Read asteroid info with Scale (" << temp.Scale_x << ", " << temp.Scale_y << ")" << std::endl;
 
 		// Time Stamp
 		uint32_t time{};
@@ -812,7 +813,15 @@ int InitializeUDP()
 		}
 	} while (bind(udp_socket, info_udp->ai_addr, static_cast<int>(info_udp->ai_addrlen)) != NO_ERROR);
 	
-
+	/* PRINT SERVER IP ADDRESS AND PORT NUMBER */
+	char clientIPAddr[1000];
+	struct sockaddr_in* serverAddress = reinterpret_cast<struct sockaddr_in*> (info_udp->ai_addr);
+	inet_ntop(AF_INET, &(serverAddress->sin_addr), clientIPAddr, INET_ADDRSTRLEN);
+	getnameinfo(info_udp->ai_addr, static_cast <socklen_t> (info_udp->ai_addrlen), clientIPAddr, sizeof(clientIPAddr), nullptr, 0, NI_NUMERICHOST);
+	std::cerr << "Client IP Address: " << clientIPAddr << std::endl;
+	std::cerr << "Client Port Num: " << client_udp_portString << std::endl;
+	std::cerr << "Server IP Address pending connect: " << server_ip << std::endl;
+	std::cerr << "Server Port Num pending connect: " << server_udp_portString << std::endl;
 
 	/*closesocket(udp_socket);
 	udp_socket = INVALID_SOCKET;

@@ -73,7 +73,8 @@ bool ValidateChecksum(size_t length_of_data, void* data, uint16_t checksum_val) 
     //add the 2 sum together, one is checksum, one is just original sum
     uint32_t sum = static_cast<uint32_t>(checking_sum) + static_cast<uint32_t>(checksum_val);
 
-    /*std::cout << "Computed: 0x" << std::hex << checking_sum
+    /*
+    << "Computed: 0x" << std::hex << checking_sum
         << " + Received: 0x" << checksum_val
         << " = 0x" << (sum & 0xFFFF) << std::endl;*/
 

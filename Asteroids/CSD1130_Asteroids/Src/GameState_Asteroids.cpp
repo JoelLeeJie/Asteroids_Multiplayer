@@ -1006,7 +1006,7 @@ void GameStateAsteroidsUpdate(void)
 		continue;
 	}
 
-	std::cout << "\n\n";
+	//std::cout << "\n\n";
 	if (!buffer.empty()) {
 
 		//we need to split first (ROLL EYE)
@@ -1022,14 +1022,14 @@ void GameStateAsteroidsUpdate(void)
 			PrintString(std::to_string(bytes_read));
 			if (Command_ID == SERVER_PLAYER_TRANSFORM) { //server_player_transform
 
-				std::cout << "SERVER_PLAYER_TRANSFORM\n";
+				//std::cout << "SERVER_PLAYER_TRANSFORM\n";
 				if (bytes_read >= buffer.size()) break; //No more things to read.
 				std::string result = buffer.substr(bytes_read); // Starts at index 1 and goes to the end
 				//if (!result.size()) {
 				//	continue;
 				//}
 				int tempp = Read_PlayersTransform(result, players, new_players); //add to player map, lets say 5
-				std::cout << "tempp size: " << tempp << std::endl;
+				//std::cout << "tempp size: " << tempp << std::endl;
 
 				//so now bytes read will be 6
 				bytes_read += tempp;
@@ -1052,7 +1052,7 @@ void GameStateAsteroidsUpdate(void)
 					}
 				}
 
-				std::cout << "SERVER_PLAYER_TRANSFORM END\n";
+				//std::cout << "SERVER_PLAYER_TRANSFORM END\n";
 
 
 			}
@@ -1095,7 +1095,7 @@ void GameStateAsteroidsUpdate(void)
 			}
 			else if (Command_ID == SERVER_ASTEROID_CREATION) {
 
-				std::cout << "SERVER_ASTEROID_CREATION\n";
+				//std::cout << "SERVER_ASTEROID_CREATION\n";
 				if (bytes_read >= buffer.size()) break; //No more things to read.
 				std::string result = buffer.substr(bytes_read);
 				bytes_read += Read_AsteroidCreations(result, Asteroid_map, new_asteroids);
@@ -1112,18 +1112,18 @@ void GameStateAsteroidsUpdate(void)
 						AEVec2	sca = { temp.Scale_x, temp.Scale_y },
 							pos = { temp.Position_x , temp.Position_y  },
 							vel = { temp.Velocity_x, temp.Velocity_y };
-						std::cout << "Creating asteroid with position (" << pos.x << ", " << pos.y << ")" << std::endl;
+						//std::cout << "Creating asteroid with position (" << pos.x << ", " << pos.y << ")" << std::endl;
 						gameObjInstCreate(this_player.player_ID, Asteroided.first, TYPE_ASTEROID, &sca, &pos, &vel, 0.0f);
 						sGameObjInstNum++;
 					}
 				}
 
-				std::cout << "SERVER_ASTEROID_CREATION END\n";
+				//std::cout << "SERVER_ASTEROID_CREATION END\n";
 
 			}
 			else if (Command_ID == SERVER_COLLISION) {
 
-				std::cout << "SERVER_COLLISION\n";
+				//std::cout << "SERVER_COLLISION\n";
 				if (bytes_read >= buffer.size()) break; //No more things to read.
 				std::string result = buffer.substr(bytes_read);
 				if (!result.size()) {
@@ -1143,13 +1143,13 @@ void GameStateAsteroidsUpdate(void)
 					onValueChange = true;
 				}
 
-				std::cout << "SERVER_COLLISION END\n";
+				//std::cout << "SERVER_COLLISION END\n";
 			}
 		}
 
 	}
 
-	std::cout << "I AM HERE 5\n\n\n";
+	//std::cout << "I AM HERE 5\n\n\n";
 
 	
 	/////////////////////////////////////////////////////////
@@ -1271,7 +1271,7 @@ void GameStateAsteroidsUpdate(void)
 
 	}
 
-	std::cout << "I AM HERE 6\n";
+	//std::cout << "I AM HERE 6\n";
 
 	////clear the map for new studd since we already create and update the values already
 	new_otherbullets.clear();

@@ -372,10 +372,6 @@ void GameProgram()
 			
 
 			std::string message = messageStream.str();
-			if (message.size() > 1000)
-			{
-				std::cout << "hello";
-			}
 			std::lock_guard<std::mutex> map_lock{ session_map_lock };
 			for (auto& [_, session] : player_Session_Map) {
 				session.SendLongMessage(message);  // queues packet for reliable sending
@@ -776,6 +772,9 @@ void HandleReceivedPackets()
 					session.reliable_transfer.ack_last_packet_received = packet.seq_or_ack_number;
 				}
 				PrintString("JOIN_REQUEST RECV, Seq Num: " + std::to_string(packet.seq_or_ack_number) + " Player ID: " + std::to_string(client_player_id));
+#ifndef _DEBUG
+				std::cout << "JOIN_REQUEST RECV, Seq Num: " + std::to_string(packet.seq_or_ack_number) + " Player ID: " + std::to_string(client_player_id) << std::endl;
+#endif
 			}
 			//Send back JOIN response to sender.
 			{
@@ -1244,7 +1243,7 @@ void WriteNewAsteroids(std::ostream& output)
 		memcpy(&netTimeCreated, &asteroid.time_of_creation, sizeof(float));
 		netTimeCreated = htonl(netTimeCreated);
 		output.write(reinterpret_cast<const char*>(&netTimeCreated), sizeof(uint32_t));
-		std::cout << "Read asteroid info with position (" << asteroid.Position_x << ", " << asteroid.Position_y << ")" << std::endl;
+		//std::cout << "Read asteroid info with position (" << asteroid.Position_x << ", " << asteroid.Position_y << ")" << std::endl;
 	}
 }
 
@@ -1295,7 +1294,7 @@ void WritePlayerTransforms(std::ostream& output) {
 	// num of players
 	uint16_t numPlayers = static_cast<uint16_t>(playerTransforms.size());
 	uint16_t netNumPlayers = htons(numPlayers);
-	std::cout << "netNumPlayers: " << netNumPlayers << std::endl;
+	//std::cout << "netNumPlayers: " << netNumPlayers << std::endl;
 	output.write(reinterpret_cast<const char*>(&netNumPlayers), sizeof(uint16_t));
 
 	for (const auto& [playerID, transform] : playerTransforms) {
