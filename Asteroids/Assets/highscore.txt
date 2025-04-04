@@ -1,5 +1,5 @@
-0 500
-2 400
-1 300
-3 200
-4 100
+Rachelazerbeam 2000 68.04
+TongYangry 1100 59.53
+JoelLeeaderNo1_0 1000 59.53
+Darylicious 900 58.29
+YeeTongAboveAll_0 800 59.53

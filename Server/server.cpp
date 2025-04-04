@@ -330,7 +330,7 @@ void GameProgram()
 			}
 		}
 		
-		//Wait to receive all messages.
+		//Wait to receive all	 messages.
 		if (!hasReceivedAllMessage) continue;
 		std::vector<std::pair<int, std::string>> player_messages{};
 		{

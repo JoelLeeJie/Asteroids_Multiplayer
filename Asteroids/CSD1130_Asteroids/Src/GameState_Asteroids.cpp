@@ -26,6 +26,7 @@ prior written consent of DigiPen Institute of Technology is prohibited.
 #include <queue>
 #include <sstream>
 #include <limits>
+#include <fstream>
 
 /******************************************************************************/
 /*!
@@ -60,6 +61,11 @@ const float         BOUNDING_RECT_SIZE = 1.0f;         // this is the normalized
 const float			MAX_FLOAT_VALUE = 3.402823466e+38F;
 
 s8					pFont;
+
+static bool isGameStarted = false;
+
+float				startTime = 0;
+
 // Constants
 constexpr float epsilon = 0.001f;
 
@@ -189,6 +195,8 @@ std::vector<unsigned int> asteroid_destruction;
 std::set<unsigned int> player_hit;
 std::vector<std::pair<unsigned int, unsigned int>> bullet_destruction;
 std::vector<int> highscores;
+std::vector<std::tuple<int, std::string, float>> prevHS;
+std::vector<int> pLives;
 
 float get_TimeStamp() {
 	auto now = std::chrono::steady_clock::now();
@@ -436,7 +444,33 @@ void GameStateAsteroidsInit(void)
 	/////////////////////////////////////////
 	for (int i = 0; i < 4; i++) {
 		highscores.push_back(0);
+		pLives.push_back(3);
 	}
+
+	// Read the previous high scores
+	std::ifstream file("../Assets/highscore.txt");  // Open the file
+	std::string line;
+
+	// Make sure the file is opened
+	if (file.is_open()) {
+		while (std::getline(file, line)) {
+			std::stringstream ss(line);
+			std::string player_name;
+			int score;
+			float time;
+
+			ss >> player_name >> score >> time;
+
+			prevHS.push_back({ score, player_name, time });
+			//std::cout << "String: " << player_name << ", Int: " << score << std::endl;
+		}
+		file.close();  // Don't forget to close the file
+	}
+	else {
+		std::cerr << "Unable to open file." << std::endl;
+	}
+
+	return;
 }
 
 /******************************************************************************/
@@ -446,7 +480,6 @@ void GameStateAsteroidsInit(void)
 /******************************************************************************/
 void GameStateAsteroidsUpdate(void)
 {
-	static bool isGameStarted = false;
 	static bool pressStartOnce = false;
 
 	/*
@@ -459,6 +492,7 @@ void GameStateAsteroidsUpdate(void)
 		if (AEInputCheckTriggered(AEVK_SPACE) && runGame == true && !pressStartOnce)
 		{
 			//Only send the start command once.
+			startTime = GetTime();
 			pressStartOnce = true;
 			//Send a Start Command to server when space is pressed.
 			std::string start_game{ (char)START_GAME };
@@ -1133,6 +1167,7 @@ void GameStateAsteroidsUpdate(void)
 
 				for (unsigned int& Asteroid_ID : asteroid_destruction) {
 					DestroyInstanceByID(Asteroid_ID, TYPE_ASTEROID, this_player.player_ID);
+					highscores[this_player.player_ID] += 100;
 					//std::cout << "Asteroid ID: " << Asteroid_ID << std::endl;
 					onValueChange = true;
 				}
@@ -1219,6 +1254,7 @@ void GameStateAsteroidsUpdate(void)
 					if (pInst == spShip)
 					{
 						sShipLives--;
+						pLives[pInst->Player_ID]--;
 						PrintString("Collided");
 					}
 					break;
@@ -1268,7 +1304,55 @@ void GameStateAsteroidsUpdate(void)
 			}
 
 		}
+	}
+	
+	// Checking all player lives
+	bool ended = false;
+	for (auto& [ID, character] : players) {
+		if (ID >= 0 && ID < 4) {
+			if (pLives[ID] > 0) {
+				ended = true;
+				break;
+			}
+		}
+	}
 
+	if (!ended) {
+		isGameStarted = ended;
+		int current_player{};
+		// Check previous score and see if you achieve a highscore
+		for (int j = 0; j < 4; j++) {
+			int currentScore = highscores[j];
+			for (int i = 0; i < 5; i++) {
+				if (currentScore > std::get<0>(prevHS[i])) {
+					std::string name = "Player_" + std::to_string(j);
+					prevHS.insert(prevHS.begin() + i, std::make_tuple(currentScore, name, GetTime() - startTime));
+					if (prevHS.size() > 5) {
+						prevHS.pop_back();
+					}
+					break;
+				}
+			}
+		}
+
+		// Write to file
+		std::ofstream file("../Assets/highscore.txt");
+
+		if (!file.is_open()) {
+			std::cerr << "Failed to open file: highscore.txt" << std::endl;
+			return;
+		}
+		
+		for (const auto& entry : prevHS)
+		{
+			int score = std::get<0>(entry);
+			const std::string& name = std::get<1>(entry);
+			float time = std::get<2>(entry);
+			
+			file << name << " " << score << " " << std::fixed << std::setprecision(2) << time << "\n";
+		}
+
+		file.close();
 	}
 
 	//std::cout << "I AM HERE 6\n";
@@ -1373,31 +1457,61 @@ void GameStateAsteroidsDraw(void)
 
 		onValueChange = false;
 	}
+	if (isGameStarted) {
+		f32 width = 8.8f, height = 8.5f;
 
-	f32 width = 8.8f, height = 8.5f;
+		for (std::pair<const unsigned int, Player>& temp : players) {
+			if (temp.first == UINT_MAX) continue;
+			if (temp.first >= 0 && temp.first < 4) {
+				char scoreStr[32];
+				snprintf(scoreStr, sizeof(scoreStr), "Player %u Score: %u", temp.first, highscores[temp.first]);
 
-	for (std::pair<const unsigned int, Player>& temp : players) {
-		if (temp.first == UINT_MAX) continue;
-		if (temp.first >= 0 && temp.first < 4) {
-			char scoreStr[32];
-			snprintf(scoreStr, sizeof(scoreStr), "Player %u Score: %u", temp.first, highscores[temp.first]);
+				AEGfxPrint(pFont, scoreStr, -width / 10, -height / 10, 0.2, 1, 1, 1, 1);
 
-			AEGfxPrint(pFont, scoreStr, -width / 10, -height / 10, 0.2, 1, 1, 1, 1);
+				height -= 1.f;
+			}
+		}
 
-			height -= 1.f;
+		//for (int i = 0; i < highscores.size(); i++) {
+		//	if (i > 0) {
+		//		char scoreStr[32];
+		//		snprintf(scoreStr, sizeof(scoreStr), "Player %u Score: %u", i, highscores[i]);
+
+		//		AEGfxPrint(pFont, scoreStr, -width / 10, -height / 10, 0.2, 1, 1, 1, 1);
+
+		//		height -= 1.f;
+		//	}
+		//}
+	}
+	else {
+		// Title
+		const char* TFS = "Top 5 Scores:";
+		f32 width, height;
+		AEGfxGetPrintSize(pFont, TFS, 1.f, &width, &height);
+		AEGfxPrint(pFont, TFS, -width / 3, height * 1.5f, 0.7, 1, 1, 1, 1);
+
+		// Printing each high score
+		const char* pText{};
+		std::string concat{};
+		int times = 0;
+
+		for (auto& [score, name, time] : prevHS) {
+			std::stringstream ss;
+			ss << name << ": " << score << " for " << time << " Seconds";  // Concatenate the string and integer
+
+			// Get the combined text
+			std::string combinedText = ss.str();
+
+			// Convert it back to a C-style string
+			const char* pText = combinedText.c_str();
+
+			f32 width{}, height{};
+			AEGfxGetPrintSize(pFont, pText, 1.f, &width, &height);
+			AEGfxPrint(pFont, pText, -width / 5, (height - (times * 0.3f)) / 2, 0.4, 1, 1, 1, 1);
+
+			times++;
 		}
 	}
-
-	//for (int i = 0; i < highscores.size(); i++) {
-	//	if (i > 0) {
-	//		char scoreStr[32];
-	//		snprintf(scoreStr, sizeof(scoreStr), "Player %u Score: %u", i, highscores[i]);
-
-	//		AEGfxPrint(pFont, scoreStr, -width / 10, -height / 10, 0.2, 1, 1, 1, 1);
-
-	//		height -= 1.f;
-	//	}
-	//}
 }
 
 /******************************************************************************/
