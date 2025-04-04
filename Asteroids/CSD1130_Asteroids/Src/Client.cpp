@@ -616,7 +616,7 @@ int Read_AsteroidCreations(const std::string& buffer, std::map<unsigned int, Ast
 
 int Read_AsteroidDestruction(const std::string& buffer, std::map<unsigned int, std::map<unsigned int, Bullet>>& all_bullets,
 	std::map<unsigned int, Asteroids>& Asteroid_map, std::vector<std::pair<unsigned int, unsigned int>>& bullet_destruction,
-	std::vector<std::pair<unsigned int, unsigned int>>& asteroid_destruction)
+	std::vector<std::pair<unsigned int, int>>& asteroid_destruction)
 {
 	// Check empty string
 	if (buffer.empty()) {
